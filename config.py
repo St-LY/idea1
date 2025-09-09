@@ -7,6 +7,7 @@ class VFLConfig:
         self.epochs = 15
         self.hidden_dims = [128, 64]  # 底部模型隐藏层维度
 
+
         # 根据MNIST特征分割计算顶部模型输入维度
         # MNIST有784个特征，平均分给各参与方
         feature_dim = 784

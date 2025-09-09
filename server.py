@@ -5,6 +5,7 @@ from models import TopModel
 from crypto_utils import CryptoUtils
 
 
+
 class Server:
     def __init__(self, input_dim, output_dim=10, learning_rate=0.01):
         self.model = TopModel(input_dim, output_dim)

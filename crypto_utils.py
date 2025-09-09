@@ -2,6 +2,7 @@ import numpy as np
 import phe as paillier
 
 
+
 class CryptoUtils:
     def __init__(self, key_size=1024):
         self.key_size = key_size

@@ -4,6 +4,7 @@ from models import BottomModel
 from crypto_utils import CryptoUtils
 
 
+
 class Client:
     def __init__(self, client_id, input_dim, hidden_dims=[128, 64], learning_rate=0.01):
         self.client_id = client_id
