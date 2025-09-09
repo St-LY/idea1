@@ -4,7 +4,7 @@ class VFLConfig:
         self.num_parties = 2  # 参与方数量
         self.batch_size = 64
         self.learning_rate = 0.001
-        self.epochs = 15
+        self.epochs = 10
         self.hidden_dims = [128, 64]  # 底部模型隐藏层维度
 
 
