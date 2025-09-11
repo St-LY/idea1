@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 from torch.ao.nn.quantized import Dropout
-
+from config import VFLConfig
 
 class BottomModel(nn.Module):
     """客户端底部模型"""
 
-    def __init__(self, input_dim, hidden_dims=[128, 256, 128, 64]):
+    def __init__(self, input_dim, hidden_dims=VFLConfig.hidden_dims):
         super(BottomModel, self).__init__()
         layers = []
         prev_dim = input_dim

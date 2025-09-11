@@ -3,7 +3,7 @@ from torchvision import datasets, transforms
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-
+from config import VFLConfig
 
 
 class MNISTDataLoader:
@@ -12,7 +12,7 @@ class MNISTDataLoader:
         self.random_state = random_state
         self.scalers = {}
 
-    def load_and_split_data(self, num_parties=2):
+    def load_and_split_data(self, num_parties=VFLConfig.num_parties):
         """
         加载MNIST数据并根据特征列分割给不同参与方
         """
@@ -25,6 +25,13 @@ class MNISTDataLoader:
         train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
         test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
 
+        #下载并加载Fashion-MNIST数据集
+
+        # #引入Fashion-MNIST数据集
+        # train_dataset = datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform)
+        # test_dataset = datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform)
+        
+        
         # 转换为numpy数组
         X_train = np.array([x.numpy() for x, _ in train_dataset])
         y_train = np.array([y for _, y in train_dataset])
