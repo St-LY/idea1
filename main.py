@@ -54,6 +54,8 @@ def main():
     # 为每个客户端设置环公钥（使用PEM格式）
     for client in clients:
         client.set_ring_public_keys(client_public_keys_pem.copy())
+        # 设置所有客户端的引用以支持匿名转发
+        client.set_all_clients(clients)
 
     print("Starting training process with ring signature verification...")
 
@@ -93,7 +95,9 @@ def main():
                     'timestamp': time.time()
                 })
 
-                signed_intermediates.append(signature)
+                # 随机选择一个客户端进行转发以实现匿名
+                forwarded_signature = client.send_to_random_client(signature)
+                signed_intermediates.append(forwarded_signature)
 
             # 协调器训练（会自动验证签名）
             result = server.train_step(signed_intermediates, batch_labels)
@@ -162,7 +166,9 @@ def main():
             'timestamp': time.time()
         })
 
-        test_signed_intermediates.append(signature)
+        # 随机选择一个客户端进行转发以实现匿名
+        forwarded_signature = client.send_to_random_client(signature)
+        test_signed_intermediates.append(forwarded_signature)
 
     test_predictions = server.predict(test_signed_intermediates)
     test_time = time.time() - test_start_time

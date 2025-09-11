@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import serialization
 import pickle
 import hashlib
 import time
+import random
 
 from models import BottomModel
 from crypto_utils import CryptoUtils
@@ -38,7 +39,7 @@ class Client:
         )
 
     def set_public_key(self, public_key):
-        """设置Paillier公钥"""
+        """设置RSA公钥"""
         self.public_key = public_key
         self.crypto.public_key = public_key
 
@@ -57,6 +58,10 @@ class Client:
                     format=serialization.PublicFormat.SubjectPublicKeyInfo
                 )
                 self.ring_public_keys_pem.append(pem)
+
+    def set_all_clients(self, all_clients):
+        """设置所有客户端的引用"""
+        self.all_clients = all_clients
 
     def forward(self, x):
         """前向传播"""
@@ -159,3 +164,29 @@ class Client:
         )
 
         return hashlib.sha256(private_key_bytes).digest()
+
+    def send_to_random_client(self, signed_data):
+        """
+        随机选择一个客户端（包括自己）来转发消息
+        """
+        if not hasattr(self, 'all_clients') or not self.all_clients:
+            # 如果没有设置所有客户端，直接返回自己的数据
+            return signed_data
+
+        # 随机选择一个客户端（包括自己）
+        target_client = random.choice(self.all_clients)
+
+        # 如果选中的是自己，直接返回
+        if target_client.client_id == self.client_id:
+            return signed_data
+
+        # 否则转发给选中的客户端
+        return target_client.receive_and_forward(signed_data)
+
+    def receive_and_forward(self, signed_data):
+        """
+        接收并转发消息（被动方行为）
+        """
+        # 这里可以添加额外的处理逻辑，比如记录日志等
+        # 目前直接返回数据
+        return signed_data
