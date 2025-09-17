@@ -14,10 +14,12 @@ class BottomModel(nn.Module):
         # 根据输入通道数构建网络
         self.conv_layers = nn.Sequential(
             nn.Conv2d(input_channels, 16, kernel_size=3, padding=1),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
             nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.AdaptiveAvgPool2d((2, 2)),  # 自适应池化到固定大小
 
@@ -45,8 +47,10 @@ class TopModel(nn.Module):
         super(TopModel, self).__init__()
         self.network = nn.Sequential(
             nn.Linear(input_dim, 32),
+            nn.BatchNorm1d(32),
             nn.ReLU(),
             nn.Linear(32, 32),
+            nn.BatchNorm1d(32),
             nn.ReLU(),
             nn.Linear(32, output_dim),
         )
