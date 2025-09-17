@@ -17,10 +17,12 @@ from config import VFLConfig
 
 
 class Client:
-    def __init__(self, client_id, input_dim, hidden_dims=VFLConfig.hidden_dims, learning_rate=VFLConfig.learning_rate):
+    # 在 __init__ 方法中修改模型初始化
+    def __init__(self, client_id, input_channels, learning_rate=VFLConfig.learning_rate):
         self.client_id = client_id
-        self.model = BottomModel(input_dim, hidden_dims)
+        self.model = BottomModel(input_channels)  # 注意这里改为 input_channels
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+
         self.crypto = CryptoUtils()
         self.public_key = None
 

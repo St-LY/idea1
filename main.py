@@ -41,7 +41,7 @@ def main():
 
     for i, party_data in enumerate(train_party_tensors):
         input_dim = party_data.shape[1]
-        client = Client(i, input_dim, config.hidden_dims, config.learning_rate)
+        client = Client(i, input_dim, config.learning_rate)
         client.set_public_key(server.get_public_key())
         clients.append(client)
         # 收集PEM格式的公钥
