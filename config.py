@@ -7,7 +7,7 @@ class VFLConfig:
         self.epochs = 10
 
         # 每个客户端输出64维特征
-        self.top_model_input_dim = 64 * self.num_parties
+        self.top_model_input_dim = 128 * self.num_parties
 
         self.output_dim = 10  # MNIST有10个类别
 

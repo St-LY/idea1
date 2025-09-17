@@ -1,6 +1,8 @@
+# models.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
 from config import VFLConfig
 
@@ -8,19 +10,18 @@ from config import VFLConfig
 class BottomModel(nn.Module):
     """客户端底部模型 - 使用卷积层处理图像片段"""
 
-    def __init__(self, input_channels):
+    def __init__(self, input_channels, learning_rate=VFLConfig.learning_rate):
         super(BottomModel, self).__init__()
 
         # 根据输入通道数构建网络
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(input_channels, 16, kernel_size=3, padding=1),
+            nn.Conv2d(input_channels, 32, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
-            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.AdaptiveAvgPool2d((2, 2)),  # 自适应池化到固定大小
-
 
         )
 
@@ -28,7 +29,10 @@ class BottomModel(nn.Module):
         self.flatten = nn.Flatten()
 
         # 全连接层输出64维特征
-        self.fc = nn.Linear(32 * 4, 64)  # 128 * 2 * 2 = 512
+        self.fc = nn.Linear(64 * 4, 128)  # 128 * 2 * 2 = 512
+
+        # 添加Adam优化器
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
     def forward(self, x):
         x = self.conv_layers(x)
@@ -41,15 +45,20 @@ class BottomModel(nn.Module):
 class TopModel(nn.Module):
     """服务器端顶部模型"""
 
-    def __init__(self, input_dim, output_dim=10):
+    def __init__(self, input_dim, output_dim=10, learning_rate=VFLConfig.learning_rate):
         super(TopModel, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(input_dim, 32),
+            nn.Linear(input_dim, 128),
             nn.ReLU(),
-            nn.Linear(32, 32),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
             nn.ReLU(),
             nn.Linear(32, output_dim),
         )
+
+        # 添加Adam优化器
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
     def forward(self, x):
         return self.network(x)
