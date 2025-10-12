@@ -164,13 +164,13 @@ def main():
         print(f"Error saving models: {e}")
         return
 
-    # 测试过程 - 使用训练好的模型进行测试
+    # main.py - 完整测试部分
     print("\nStarting testing process with trained models...")
     test_start_time = time.time()
 
     # 创建新的服务器实例并加载训练好的模型
     print("Loading trained coordinator model...")
-    trained_server = Server(config.top_model_input_dim, config.output_dim, config.learning_rate)
+    trained_server = Server(128, config.output_dim, config.learning_rate)  # 输入维度改为128
     trained_server.model.load_state_dict(torch.load('coordinator_model.pth'))
 
     # 加载客户端模型
@@ -182,8 +182,7 @@ def main():
         trained_client.model.load_state_dict(torch.load(f'client_{i}_model.pth'))
         trained_clients.append(trained_client)
 
-    # 直接在服务器端进行测试，不需要客户端参与
-    # 将测试数据分批次处理以避免内存问题
+    # 直接在服务器端进行测试
     test_batch_size = config.batch_size
     test_predictions_list = []
     test_labels_list = []
@@ -204,17 +203,28 @@ def main():
         batch_test_labels = y_test_tensor[batch_start:batch_end]
         test_labels_list.append(batch_test_labels)
 
-        # 使用训练好的客户端计算测试中间结果
-        test_intermediates = []
+        # 使用训练好的客户端计算测试中间结果并累加
+        accumulated_intermediate = None
         for client, data in zip(trained_clients, batch_test_data):
             intermediate = client.compute_intermediate(data)
-            test_intermediates.append(intermediate)
+
+            # 累加中间结果
+            if accumulated_intermediate is None:
+                accumulated_intermediate = intermediate
+            else:
+                accumulated_intermediate += intermediate
 
         # 使用训练好的服务器模型进行预测
         with torch.no_grad():
-            combined_input = torch.cat(test_intermediates, dim=1)
-            batch_predictions = trained_server.model(combined_input)
-            test_predictions_list.append(batch_predictions)
+            # 直接使用累加结果作为输入
+            if accumulated_intermediate is not None:
+                batch_predictions = trained_server.model(accumulated_intermediate)
+                test_predictions_list.append(batch_predictions)
+            else:
+                # 处理没有中间结果的情况
+                batch_size = batch_test_labels.size(0)
+                dummy_predictions = torch.zeros(batch_size, config.output_dim)
+                test_predictions_list.append(dummy_predictions)
 
     # 合并所有批次的预测结果
     test_predictions = torch.cat(test_predictions_list, dim=0)

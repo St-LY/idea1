@@ -161,59 +161,57 @@ class Server:
         return self._used_key_images.get(key_image, 0)
 
     def process_encrypted_messages(self, signed_messages):
-        """处理签名消息：先验证签名，再解密"""
-        valid_intermediates = []
+        """处理签名消息：累加而不是拼接"""
+        accumulated_intermediate = None
         valid_count = 0
 
         for signed_message in signed_messages:
-            # 1. 先验证环签名
+            # 1. 验证环签名
             is_valid, reason = self.verify_ring_signature(signed_message)
             if not is_valid:
                 print(f"Invalid signature detected: {reason}")
                 continue
 
-            # 2. 签名验证通过后，解密消息中的加密数据
+            # 2. 解密消息
             try:
-                # 从签名消息中获取加密的中间结果
                 encrypted_intermediate = signed_message['message']['intermediate']
-
-                # 解密加密的中间结果
                 decrypted_data = self.decrypt_message(encrypted_intermediate)
+
                 if decrypted_data is not None:
-                    # 将解密后的数据转换为tensor
+                    # 转换为tensor
                     if isinstance(decrypted_data, list):
-                        # 如果解密后是列表，转换为numpy数组再转为tensor
                         intermediate_tensor = torch.tensor(np.array(decrypted_data)).float()
                     else:
-                        # 如果解密后是numpy数组，直接转为tensor
                         intermediate_tensor = torch.tensor(decrypted_data).float()
 
-                    valid_intermediates.append(intermediate_tensor)
+                    # 累加而不是拼接
+                    if accumulated_intermediate is None:
+                        accumulated_intermediate = intermediate_tensor
+                    else:
+                        accumulated_intermediate += intermediate_tensor
+
                     valid_count += 1
                 else:
                     print("Failed to decrypt message")
             except Exception as e:
                 print(f"Decryption failed: {e}")
 
-        return valid_intermediates, valid_count
+        return accumulated_intermediate, valid_count
 
     def train_step(self, encrypted_messages, labels):
         """
-        训练一步：先解密消息，再验证签名，最后处理中间结果
+        训练一步：使用累加而不是拼接
         """
-        # 处理加密消息：解密并验证签名
-        valid_intermediates, valid_count = self.process_encrypted_messages(encrypted_messages)
+        # 处理加密消息：解密并累加
+        accumulated_intermediate, valid_count = self.process_encrypted_messages(encrypted_messages)
 
         # 如果没有有效的中间结果，返回空值
-        if not valid_intermediates:
+        if accumulated_intermediate is None:
             print("No valid intermediates received. Skipping training step.")
             return None, None, 0
 
-        # 合并来自各客户端的中间输出
-        combined_input = torch.cat(valid_intermediates, dim=1)
-
-        # 前向传播
-        predictions = self.model(combined_input)
+        # 前向传播 - 直接使用累加结果
+        predictions = self.model(accumulated_intermediate)
 
         # 计算损失
         loss = self.compute_loss(predictions, labels)
