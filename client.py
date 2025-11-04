@@ -13,18 +13,22 @@ import random
 
 from models import BottomModel
 from crypto_utils import CryptoUtils
-
 from config import VFLConfig
 
 
 class Client:
     def __init__(self, client_id, input_channels, learning_rate=VFLConfig.learning_rate):
         self.client_id = client_id
-        self.model = BottomModel(input_channels)
+
+        # 获取设备配置
+        self.device = VFLConfig.device
+
+        # 初始化模型并移到GPU
+        self.model = BottomModel(input_channels).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         self.crypto = CryptoUtils()
-        self.server_public_key = None  # 服务器公钥
+        self.server_public_key = None
 
         # 生成RSA密钥对用于环签名
         self.rsa_private_key = rsa.generate_private_key(
@@ -39,6 +43,8 @@ class Client:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
+
+        print(f"Client {client_id} initialized on device: {self.device}")
 
     def set_server_public_key(self, public_key):
         """设置服务器公钥用于加密消息"""
@@ -63,6 +69,8 @@ class Client:
 
     def forward(self, x):
         """前向传播"""
+        # 确保输入数据在正确的设备上
+        x = x.to(self.device)
         return self.model(x)
 
     def compute_intermediate(self, x):
@@ -76,12 +84,12 @@ class Client:
         self.optimizer.step()
 
     def encrypt_intermediate(self, intermediate):
-        """加密中间结果（使用服务器公钥）"""
+        """加密中间结果(使用服务器公钥)"""
         if self.server_public_key is None:
             raise ValueError("Server public key not set. Call set_server_public_key() first.")
 
-        # 将中间结果转换为numpy数组并加密
-        intermediate_np = intermediate.detach().numpy()
+        # 将中间结果转换为numpy数组并加密（需要先移到CPU）
+        intermediate_np = intermediate.cpu().detach().numpy()
         encrypted_intermediate = self.crypto.encrypt_with_public_key(
             intermediate_np.tolist(),
             self.server_public_key
@@ -90,6 +98,10 @@ class Client:
 
     def train_step(self, x, top_gradient):
         """客户端训练一步"""
+        # 确保输入和梯度在正确的设备上
+        x = x.to(self.device)
+        top_gradient = top_gradient.to(self.device)
+
         self.optimizer.zero_grad()
         output = self.model(x)
         output.backward(top_gradient)
@@ -97,7 +109,8 @@ class Client:
 
     def ring_signature(self, message):
         """
-        使用RSA构建环签名（签名原始消息）
+        使用RSA构建环签名
+        修复: 密钥镜像包含消息上下文以避免重复
         """
         if not hasattr(self, 'ring_public_keys_pem'):
             raise ValueError("No ring public keys set. Call set_ring_public_keys() first.")
@@ -109,15 +122,15 @@ class Client:
         else:
             message = {'data': message, 'timestamp': time.time()}
 
-        # 生成密钥镜像
-        key_image = self._generate_key_image()
+        # 生成唯一的密钥镜像(包含epoch, batch_idx和phase信息)
+        key_image = self._generate_key_image(message)
 
         # 加密中间结果
         if isinstance(message['intermediate'], torch.Tensor):
             encrypted_intermediate, shape = self.encrypt_intermediate(message['intermediate'])
             message['intermediate'] = encrypted_intermediate
 
-        # 生成签名数据（用于签名）
+        # 生成签名数据(用于签名)
         signature_payload = {
             'message': message,
             'key_image': key_image,
@@ -150,14 +163,24 @@ class Client:
 
         return signed_data
 
-    def _generate_key_image(self):
-        """生成密钥镜像"""
+    def _generate_key_image(self, message):
+        """
+        生成密钥镜像
+        修复: 包含消息的epoch, batch_idx和phase信息以确保唯一性
+        """
         private_key_bytes = self.rsa_private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
-        return hashlib.sha256(private_key_bytes).digest()
+
+        # 创建包含上下文的唯一标识符
+        context_str = f"{message.get('epoch', 0)}_{message.get('batch_idx', 0)}_{message.get('phase', 'unknown')}_{message.get('client_id', self.client_id)}"
+        context_bytes = context_str.encode('utf-8')
+
+        # 组合私钥和上下文信息生成唯一的密钥镜像
+        combined = private_key_bytes + context_bytes
+        return hashlib.sha256(combined).digest()
 
     def encrypt_message_for_server(self, signed_data):
         """使用服务器公钥加密签名后的消息"""
@@ -172,11 +195,11 @@ class Client:
 
     def send_to_random_client(self, intermediate, batch_idx, epoch):
         """
-        先加密中间结果，再对加密数据进行签名，然后随机转发
+        先加密中间结果,再对加密数据进行签名,然后随机转发
         """
-        # 直接对中间结果进行签名（签名函数内部会处理加密）
+        # 直接对中间结果进行签名(签名函数内部会处理加密)
         signature = self.ring_signature({
-            'intermediate': intermediate,  # 签名的是原始中间结果
+            'intermediate': intermediate,
             'batch_idx': batch_idx,
             'epoch': epoch,
             'client_id': self.client_id,
@@ -189,26 +212,25 @@ class Client:
 
     def send_to_random_client_direct(self, signed_data):
         """
-        直接发送签名数据（不加密，因为已经加密过了）
+        直接发送签名数据(不加密,因为已经加密过了)
         """
         if not hasattr(self, 'all_clients') or not self.all_clients:
-            # 如果没有设置所有客户端，直接返回签名的数据
+            # 如果没有设置所有客户端,直接返回签名的数据
             return signed_data
 
-        # 随机选择一个客户端（包括自己）
+        # 随机选择一个客户端(包括自己)
         target_client = random.choice(self.all_clients)
 
-        # 如果选中的是自己，直接返回签名的数据
+        # 如果选中的是自己,直接返回签名的数据
         if target_client.client_id == self.client_id:
             return signed_data
 
         # 否则将签名的数据转发给选中的客户端
         return target_client.receive_and_forward_signed(signed_data)
 
-
     def receive_and_forward_signed(self, signed_data):
         """
-        接收并转发已经签名的数据（被动方行为）
+        接收并转发已经签名的数据(被动方行为)
         """
-        # 直接返回已经签名的数据，不进行任何处理
+        # 直接返回已经签名的数据,不进行任何处理
         return signed_data
