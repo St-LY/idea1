@@ -6,9 +6,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from cryptography.fernet import Fernet
 import pickle
-import hashlib
 import time
 from numba import jit, prange
 import warnings
@@ -16,6 +14,7 @@ import warnings
 from models import TopModel
 from crypto_utils import CryptoUtils
 from config import VFLConfig
+from token_manager import ServerTokenVerifier
 
 warnings.filterwarnings('ignore')
 
@@ -23,13 +22,11 @@ warnings.filterwarnings('ignore')
 # Numba优化的距离计算函数
 @jit(nopython=True, fastmath=True, cache=True)
 def compute_manhattan_distance_numba(vec1, vec2):
-    """使用Numba加速的曼哈顿距离计算"""
     return np.sum(np.abs(vec1 - vec2))
 
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def compute_distances_to_group_numba(vector, group_vectors):
-    """并行计算向量与组内所有向量的距离"""
     n = len(group_vectors)
     distances = np.empty(n, dtype=np.float64)
     for i in prange(n):
@@ -39,7 +36,6 @@ def compute_distances_to_group_numba(vector, group_vectors):
 
 @jit(nopython=True, fastmath=True, cache=True)
 def compute_avg_distance_numba(distances):
-    """计算平均距离"""
     if len(distances) == 0:
         return 0.0
     return np.mean(distances)
@@ -47,7 +43,6 @@ def compute_avg_distance_numba(distances):
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def compute_group_avg_distances_numba(vectors_array):
-    """并行计算组内所有向量的平均距离"""
     n = len(vectors_array)
     if n <= 1:
         return np.zeros(n, dtype=np.float64)
@@ -67,7 +62,6 @@ def compute_group_avg_distances_numba(vectors_array):
 
 @jit(nopython=True, fastmath=True, cache=True)
 def find_max_distance_index_numba(distances):
-    """找到最大距离的索引"""
     max_val = distances[0]
     max_idx = 0
     for i in range(1, len(distances)):
@@ -78,24 +72,46 @@ def find_max_distance_index_numba(distances):
 
 
 class Server:
-    def __init__(self, input_dim, output_dim=VFLConfig.output_dim, learning_rate=VFLConfig.learning_rate):
-        # 获取设备配置
-        self.device = VFLConfig.device
+    def __init__(self, input_dim, output_dim=10, learning_rate=0.001, num_clients=5, dataset_config=None):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # 初始化模型并移到GPU
-        self.model = TopModel(input_dim, output_dim).to(self.device)
+        # 初始化模型 - 传入数据集配置
+        if dataset_config is not None:
+            top_config = dataset_config.get('top_model', None)
+        else:
+            top_config = None
+
+        self.model = TopModel(input_dim, output_dim, top_config).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         self.criterion = nn.CrossEntropyLoss()
+
+        # 混合精度训练配置 - 使用默认值而不是引用VFLConfig类属性
+        self.use_amp = torch.cuda.is_available()  # 默认情况下，如果有CUDA则启用AMP
+        self.amp_dtype = torch.float16  # 添加AMP数据类型属性
+        if self.use_amp:
+            self.scaler = torch.cuda.amp.GradScaler()
+            print(f"Mixed precision training enabled")
+
+        # ... 其余代码保持不变 ...
+
+        # 梯度累积配置 - 使用默认值
+        self.gradient_accumulation_steps = 1
+        self.accumulation_counter = 0
+
+        # ... 其余代码保持不变 ...
 
         # 生成RSA密钥对
         self.crypto = CryptoUtils()
         self.public_key, self.private_key = self.crypto.generate_keys()
 
-        # 存储客户端公钥和签名验证相关信息
+        # 存储客户端公钥
         self.client_public_keys = {}
         self.signature_verification_enabled = True
         self.invalid_signature_count = 0
         self.valid_signature_count = 0
+
+        # 令牌验证器
+        self.token_verifier = ServerTokenVerifier(num_clients)
 
         # 防投毒机制相关
         self.output_dim = output_dim
@@ -118,6 +134,11 @@ class Server:
 
         print(f"Server initialized on device: {self.device}")
 
+    def initialize_token_verifier(self, chain_secret):
+        """初始化令牌验证器"""
+        self.token_verifier.initialize_chain_secret(chain_secret)
+        print("[Server] Token verifier initialized")
+
     def register_client_public_key(self, client_id, public_key):
         """注册客户端的RSA公钥"""
         self.client_public_keys[client_id] = public_key
@@ -135,9 +156,21 @@ class Server:
 
     def backward(self, loss):
         """反向传播"""
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+        if self.use_amp:
+            self.scaler.scale(loss).backward()
+            self.accumulation_counter += 1
+            if self.accumulation_counter >= self.gradient_accumulation_steps:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()
+                self.accumulation_counter = 0
+        else:
+            loss.backward()
+            self.accumulation_counter += 1
+            if self.accumulation_counter >= self.gradient_accumulation_steps:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                self.accumulation_counter = 0
 
     def decrypt_message(self, encrypted_data):
         """解密客户端发送的加密消息"""
@@ -147,8 +180,34 @@ class Server:
             print(f"Message decryption failed: {e}")
             return None
 
+    def verify_token_proof(self, signed_message):
+        """验证令牌证明"""
+        try:
+            message = signed_message['message']
+            token_proof = message.get('token_proof')
+
+            if token_proof is None:
+                return False, "No token proof provided"
+
+            # 构建验证用的消息数据
+            message_data = {
+                'batch_idx': message.get('batch_idx'),
+                'epoch': message.get('epoch'),
+                'phase': message.get('phase'),
+                'client_id': message.get('client_id'),
+                'timestamp': message.get('timestamp')
+            }
+
+            # 验证令牌证明
+            is_valid, reason = self.token_verifier.verify_token_proof(token_proof, message_data)
+
+            return is_valid, reason
+
+        except Exception as e:
+            return False, f"Token proof verification error: {str(e)}"
+
     def verify_ring_signature(self, signature_data):
-        """验证环签名(先解密后验证)"""
+        """验证环签名"""
         if not self.signature_verification_enabled:
             return True, "Signature verification disabled"
 
@@ -168,7 +227,7 @@ class Server:
                 return False, "Timestamp too old or in the future"
 
             if not public_keys_pem:
-                return False, "No public keys available for verification"
+                return False, "No public keys available"
 
             if self._is_key_image_used(key_image):
                 stored_timestamp = self._get_key_image_timestamp(key_image)
@@ -176,7 +235,6 @@ class Server:
                     pass
                 else:
                     print(f"[Warning] Key image reused with time gap: {abs(timestamp - stored_timestamp):.2f}s")
-                    pass
 
             if signature_bytes is None:
                 signature_payload = {
@@ -213,33 +271,37 @@ class Server:
             return False, f"Signature verification error: {str(e)}"
 
     def _is_key_image_used(self, key_image):
-        """检查密钥镜像是否已使用"""
         if not hasattr(self, '_used_key_images'):
             self._used_key_images = {}
         return key_image in self._used_key_images
 
     def _mark_key_image_used(self, key_image, timestamp):
-        """标记密钥镜像为已使用"""
         if not hasattr(self, '_used_key_images'):
             self._used_key_images = {}
         self._used_key_images[key_image] = timestamp
 
     def _get_key_image_timestamp(self, key_image):
-        """获取密钥镜像对应的时间戳"""
         if not hasattr(self, '_used_key_images'):
             self._used_key_images = {}
             return 0
         return self._used_key_images.get(key_image, 0)
 
     def process_encrypted_messages(self, signed_messages):
-        """处理签名消息:累加而不是拼接"""
+        """处理签名消息：先验证令牌，再验证签名，最后累加"""
         accumulated_intermediate = None
         valid_count = 0
 
         for signed_message in signed_messages:
+            # 首先验证令牌证明
+            is_token_valid, token_reason = self.verify_token_proof(signed_message)
+            if not is_token_valid:
+                print(f"Invalid token proof: {token_reason}")
+                continue
+
+            # 然后验证环签名
             is_valid, reason = self.verify_ring_signature(signed_message)
             if not is_valid:
-                print(f"Invalid signature detected: {reason}")
+                print(f"Invalid signature: {reason}")
                 continue
 
             try:
@@ -267,7 +329,7 @@ class Server:
         return accumulated_intermediate, valid_count
 
     def _convert_vectors_to_numpy(self, label):
-        """将标签的向量列表转换为numpy数组以便Numba处理"""
+        """将标签的向量列表转换为numpy数组"""
         vectors = self.label_vectors[label]
         if len(vectors) == 0:
             return np.empty((0, 0), dtype=np.float64)
@@ -277,13 +339,13 @@ class Server:
         return numpy_vectors
 
     def compute_manhattan_distance(self, vec1, vec2):
-        """计算两个向量的曼哈顿距离 - 使用Numba优化"""
+        """计算曼哈顿距离"""
         vec1_np = vec1.cpu().numpy().astype(np.float64) if isinstance(vec1, torch.Tensor) else vec1.astype(np.float64)
         vec2_np = vec2.cpu().numpy().astype(np.float64) if isinstance(vec2, torch.Tensor) else vec2.astype(np.float64)
         return compute_manhattan_distance_numba(vec1_np, vec2_np)
 
     def compute_avg_distance_to_group(self, vector, group_vectors):
-        """计算一个向量与组内所有向量的平均曼哈顿距离 - 使用Numba优化"""
+        """计算平均距离"""
         if len(group_vectors) == 0:
             return 0.0
 
@@ -296,10 +358,9 @@ class Server:
         return compute_avg_distance_numba(distances)
 
     def update_label_vectors_pretraining(self, vector, label):
-        """预训练阶段:更新标签对应的向量数组"""
+        """预训练阶段：更新标签对应的向量数组"""
         label = int(label)
         vector_detached = vector.detach().clone()
-
         current_vectors = self.label_vectors[label]
 
         if len(current_vectors) < self.max_vectors_per_label:
@@ -325,28 +386,17 @@ class Server:
 
         if new_vec_avg_dist > threshold:
             self.poisoning_stats['rejected_count'] += 1
-            print(f"[Defense] Rejected vector for label {label}: "
-                  f"distance {new_vec_avg_dist:.4f} > threshold {threshold:.4f}")
             return False
         else:
             self.poisoning_stats['accepted_count'] += 1
-
             if new_vec_avg_dist < max_avg_dist:
                 current_vectors[max_dist_idx] = vector_detached
                 self.poisoning_stats['replaced_count'] += 1
                 self._update_label_avg_distances(label)
-
-                updated_avg_distances = self.label_avg_distances[label]
-                group_mean_dist = np.mean(updated_avg_distances) if len(updated_avg_distances) > 0 else 0
-
-                print(f"[Defense] Replaced vector for label {label}: "
-                      f"new distance {new_vec_avg_dist:.4f} < max distance {max_avg_dist:.4f}, "
-                      f"updated group avg: {group_mean_dist:.4f}")
-
             return True
 
     def _update_label_avg_distances(self, label):
-        """更新指定标签下所有向量的平均距离 - 使用Numba优化"""
+        """更新标签下所有向量的平均距离"""
         current_vectors = self.label_vectors[label]
 
         if len(current_vectors) <= 1:
@@ -358,9 +408,8 @@ class Server:
         self.label_avg_distances[label] = avg_distances
 
     def check_vector_formal_training(self, vector, label):
-        """正式训练阶段:检查向量是否应该被接受 - 使用Numba优化"""
+        """正式训练阶段：检查向量"""
         if self.reference_vectors is None or self.reference_avg_distances is None:
-            print("[Warning] Reference vectors not computed. Accepting by default.")
             return True
 
         label = int(label)
@@ -374,15 +423,13 @@ class Server:
 
         if distance > threshold:
             self.poisoning_stats['rejected_count'] += 1
-            print(f"[Defense] Rejected vector for label {label}: "
-                  f"distance {distance:.4f} > threshold {threshold:.4f}")
             return False
         else:
             self.poisoning_stats['accepted_count'] += 1
             return True
 
     def finalize_pretraining(self):
-        """结束预训练,计算参考向量和平均距离 - 使用Numba优化"""
+        """结束预训练"""
         print("\n[Defense] Finalizing pretraining phase...")
 
         self.reference_vectors = {}
@@ -392,7 +439,7 @@ class Server:
             vectors = self.label_vectors[label]
 
             if len(vectors) == 0:
-                print(f"[Warning] No vectors collected for label {label}")
+                print(f"[Warning] No vectors for label {label}")
                 self.reference_vectors[label] = torch.zeros(128).to(self.device)
                 self.reference_avg_distances[label] = 0.0
                 continue
@@ -409,25 +456,27 @@ class Server:
 
             self.reference_avg_distances[label] = avg_dist
 
-            print(f"[Defense] Label {label}: {len(vectors)} vectors, "
-                  f"avg distance to reference: {avg_dist:.4f}")
+            print(f"[Defense] Label {label}: {len(vectors)} vectors, avg distance: {avg_dist:.4f}")
 
         self.is_pretraining = False
-        print("[Defense] Pretraining completed. Starting formal training with defense.\n")
-        print(f"[Defense] Pretraining completed. BorderPara value: {self.BorderPara:.4f}")
+        print(f"[Defense] Pretraining completed. BorderPara: {self.BorderPara:.4f}\n")
 
     def train_step(self, encrypted_messages, labels):
-        """训练一步:使用累加而不是拼接,并加入防投毒机制"""
-        # 将labels移到GPU
+        """训练一步"""
         labels = labels.to(self.device)
 
         accumulated_intermediate, valid_count = self.process_encrypted_messages(encrypted_messages)
 
         if accumulated_intermediate is None:
-            print("No valid intermediates received. Skipping training step.")
+            print("No valid intermediates received.")
             return None, None, 0
 
-        predictions = self.model(accumulated_intermediate)
+        # 使用混合精度
+        if self.use_amp:
+            with torch.cuda.amp.autocast(dtype=self.amp_dtype):
+                predictions = self.model(accumulated_intermediate)
+        else:
+            predictions = self.model(accumulated_intermediate)
 
         _, predicted_labels = torch.max(predictions.data, 1)
 
@@ -445,12 +494,10 @@ class Server:
             should_train_flags.append(should_train)
 
         if not any(should_train_flags):
-            print("[Defense] All samples rejected. Skipping training step.")
             return None, None, 0
 
         accepted_indices = [i for i, flag in enumerate(should_train_flags) if flag]
         if len(accepted_indices) < len(labels):
-            print(f"[Defense] {len(accepted_indices)}/{len(labels)} samples accepted for training")
             filtered_predictions = predictions[accepted_indices]
             filtered_labels = labels[accepted_indices]
         else:
@@ -458,22 +505,11 @@ class Server:
             filtered_labels = labels
 
         loss = self.compute_loss(filtered_predictions, filtered_labels)
+        loss = loss / self.gradient_accumulation_steps
+
         self.backward(loss)
 
-        return loss.item(), predictions, valid_count
-
-    def predict(self, encrypted_messages):
-        """预测:先解密消息,再验证签名,最后处理中间结果"""
-        valid_intermediates, _ = self.process_encrypted_messages(encrypted_messages)
-
-        if not valid_intermediates:
-            print("No valid intermediates received. Skipping prediction.")
-            return None
-
-        with torch.no_grad():
-            combined_input = torch.cat(valid_intermediates, dim=1)
-            predictions = self.model(combined_input)
-            return predictions
+        return loss.item() * self.gradient_accumulation_steps, predictions, valid_count
 
     def compute_accuracy(self, predictions, labels):
         """计算准确率"""
@@ -483,7 +519,7 @@ class Server:
         return correct / total
 
     def get_signature_stats(self):
-        """获取签名验证统计信息"""
+        """获取签名验证统计"""
         total = self.valid_signature_count + self.invalid_signature_count
         return {
             'valid_signatures': self.valid_signature_count,
@@ -492,7 +528,7 @@ class Server:
         }
 
     def get_poisoning_stats(self):
-        """获取防投毒统计信息"""
+        """获取防投毒统计"""
         total = self.poisoning_stats['accepted_count'] + self.poisoning_stats['rejected_count']
         return {
             'accepted': self.poisoning_stats['accepted_count'],
@@ -500,6 +536,10 @@ class Server:
             'replaced': self.poisoning_stats['replaced_count'],
             'acceptance_rate': self.poisoning_stats['accepted_count'] / max(1, total)
         }
+
+    def get_token_stats(self):
+        """获取令牌验证统计"""
+        return self.token_verifier.get_statistics()
 
     def enable_signature_verification(self, enabled=True):
         """启用或禁用签名验证"""
