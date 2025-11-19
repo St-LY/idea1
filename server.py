@@ -75,7 +75,7 @@ class Server:
     def __init__(self, input_dim, output_dim=10, learning_rate=0.001, num_clients=5, dataset_config=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # 初始化模型 - 传入数据集配置
+        # ✅ 正确提取 top_model 配置
         if dataset_config is not None:
             top_config = dataset_config.get('top_model', None)
         else:
@@ -287,7 +287,11 @@ class Server:
         return self._used_key_images.get(key_image, 0)
 
     def process_encrypted_messages(self, signed_messages):
-        """处理签名消息：先验证令牌，再验证签名，最后累加"""
+        """
+        处理签名消息：先验证令牌，再验证签名，最后累加
+
+        使用累加方式：所有客户端的中间结果相加
+        """
         accumulated_intermediate = None
         valid_count = 0
 
@@ -310,11 +314,13 @@ class Server:
 
                 if decrypted_data is not None:
                     if isinstance(decrypted_data, list):
-                        intermediate_tensor = torch.tensor(np.array(decrypted_data, dtype=np.float32)).float().to(
-                            self.device)
+                        intermediate_tensor = torch.tensor(
+                            np.array(decrypted_data, dtype=np.float32)
+                        ).float().to(self.device)
                     else:
                         intermediate_tensor = torch.tensor(decrypted_data).float().to(self.device)
 
+                    # 累加方式：相加所有客户端的中间结果
                     if accumulated_intermediate is None:
                         accumulated_intermediate = intermediate_tensor
                     else:

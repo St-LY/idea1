@@ -1,4 +1,4 @@
-#file:C:\Users\24576\Desktop\thesis01\VFL框架\idea1\models.py
+# file:C:\Users\24576\Desktop\thesis01\VFL框架\idea1\models.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -71,7 +71,7 @@ class BottomModel(nn.Module):
             }
 
         self.input_channels = input_channels
-        
+
         # 构建卷积层
         conv_layers = []
         for layer_config in dataset_config['layers']:
@@ -88,12 +88,6 @@ class BottomModel(nn.Module):
                 conv_layers.append(nn.BatchNorm2d(layer_config['num_features']))
             elif layer_type == 'relu':
                 conv_layers.append(nn.ReLU())
-            elif layer_type == 'leaky_relu':
-                conv_layers.append(nn.LeakyReLU(layer_config.get('negative_slope', 0.01)))
-            elif layer_type == 'tanh':
-                conv_layers.append(nn.Tanh())
-            elif layer_type == 'sigmoid':
-                conv_layers.append(nn.Sigmoid())
             elif layer_type == 'maxpool2d':
                 conv_layers.append(nn.MaxPool2d(
                     layer_config['kernel_size'],
@@ -108,11 +102,9 @@ class BottomModel(nn.Module):
                 ))
             elif layer_type == 'adaptiveavgpool2d':
                 conv_layers.append(nn.AdaptiveAvgPool2d(layer_config['output_size']))
-            elif layer_type == 'adaptivemaxpool2d':
-                conv_layers.append(nn.AdaptiveMaxPool2d(layer_config['output_size']))
-        
+
         self.conv_layers = nn.Sequential(*conv_layers)
-        
+
         # 构建全连接层
         fc_layers = []
         for layer_config in dataset_config['fc_layers']:
@@ -126,24 +118,18 @@ class BottomModel(nn.Module):
                 fc_layers.append(nn.BatchNorm1d(layer_config['num_features']))
             elif layer_type == 'relu':
                 fc_layers.append(nn.ReLU())
-            elif layer_type == 'leaky_relu':
-                fc_layers.append(nn.LeakyReLU(layer_config.get('negative_slope', 0.01)))
-            elif layer_type == 'tanh':
-                fc_layers.append(nn.Tanh())
-            elif layer_type == 'sigmoid':
-                fc_layers.append(nn.Sigmoid())
             elif layer_type == 'dropout':
                 fc_layers.append(nn.Dropout(layer_config.get('p', 0.5)))
-        
+
         self.fc_layers = nn.Sequential(*fc_layers)
-        
-        # 展平层
         self.flatten = nn.Flatten()
+        self.output_dim = dataset_config['fc_out']
 
     def forward(self, x):
         x = self.conv_layers(x)
         x = self.flatten(x)
-        x = self.fc_layers(x)
+        if len(self.fc_layers) > 0:
+            x = self.fc_layers(x)
         return x
 
 
@@ -209,6 +195,8 @@ class TopModel(nn.Module):
                 layers.append(nn.BatchNorm1d(layer_config['num_features']))
             elif layer_type == 'relu':
                 layers.append(nn.ReLU())
+            elif layer_type == 'Sigmoid':
+                layers.append(nn.Sigmoid())
             elif layer_type == 'leaky_relu':
                 layers.append(nn.LeakyReLU(layer_config.get('negative_slope', 0.01)))
             elif layer_type == 'tanh':
@@ -217,7 +205,7 @@ class TopModel(nn.Module):
                 layers.append(nn.Sigmoid())
             elif layer_type == 'dropout':
                 layers.append(nn.Dropout(layer_config.get('p', 0.5)))
-        
+
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):

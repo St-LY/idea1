@@ -21,14 +21,19 @@ from token_manager import TokenManager
 class Client:
     def __init__(self, client_id, input_channels, learning_rate=None, dataset_config=None):
         self.client_id = client_id
-        # 使用默认设备而不是引用VFLConfig类属性
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if learning_rate is None:
             learning_rate = 0.001
 
-        # 初始化模型
-        self.model = BottomModel(input_channels).to(self.device)
+        # ✅ 正确提取 bottom_model 配置
+        if dataset_config is not None:
+            bottom_config = dataset_config.get('bottom_model', None)
+        else:
+            bottom_config = None
+
+        # 传递 bottom_model 配置而不是整个 dataset_config
+        self.model = BottomModel(input_channels, bottom_config).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         self.crypto = CryptoUtils()

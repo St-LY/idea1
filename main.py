@@ -143,8 +143,9 @@ def main():
     chain_master_secret = secrets.token_bytes(32)
     print_info(f"Generated chain master secret")
 
+    # 在main.py中找到服务器初始化部分，确保使用正确的输入维度
     server = Server(
-        config.top_model_input_dim,  # 确保此值正确
+        config.top_model_input_dim,  # 确保这个值正确
         config.output_dim,
         config.learning_rate,
         num_clients=config.num_parties,
@@ -178,9 +179,26 @@ def main():
         print_info(f"Client {i} initialized")
 
     # 为每个客户端设置环公钥和客户端引用
+    # 为每个客户端设置环公钥和客户端引用
     for client in clients:
         client.set_ring_public_keys(client_public_keys_pem.copy())
         client.set_all_clients(clients)
+
+    # 调试信息：检查客户端输出维度和服务器输入维度
+    print(f"Server top model input dim: {config.top_model_input_dim}")
+    for i, client in enumerate(clients):
+        # 测试客户端输出维度 - 使用多个样本避免BatchNorm问题
+        if args.dataset == 'MNIST' or args.dataset == 'FashionMNIST':
+            # 灰度图像使用1个通道
+            test_input = torch.randn(2, 1, 28, 28).to(config.device)
+        else:
+            # 彩色图像使用3个通道
+            test_input = torch.randn(2, 3, 32, 32).to(config.device)  # 使用2个样本
+        client.model.eval()  # 设置为评估模式
+        with torch.no_grad():  # 不计算梯度
+            test_output = client.model(test_input)
+        client.model.train()  # 恢复训练模式
+        print(f"Client {i} output dim: {test_output.shape[1]}")
 
     # 启动所有客户端的并行处理线程
     print_info("\nStarting parallel processing threads...")
@@ -441,6 +459,7 @@ def main():
         config.top_model_input_dim,
         config.output_dim,
         config.learning_rate,
+        num_clients=config.num_parties,
         dataset_config=config.dataset_config
     )
     trained_server.model.load_state_dict(
@@ -473,13 +492,14 @@ def main():
 
             test_labels_list.append(batch_labels)
 
+            # 使用累加方式：将所有客户端的中间结果相加
             accumulated_intermediate = None
             for client, data in zip(trained_clients, party_samples_list):
                 intermediate = client.compute_intermediate(data)
                 if accumulated_intermediate is None:
                     accumulated_intermediate = intermediate
                 else:
-                    accumulated_intermediate += intermediate
+                    accumulated_intermediate += intermediate  # 累加
 
             if accumulated_intermediate is not None:
                 if config.use_amp:
