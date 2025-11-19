@@ -117,40 +117,38 @@ class DatasetConfig:
         'num_classes': 10,
         'bottom_model': {
             'layers': [
-                {'type': 'conv2d', 'in_channels': 1, 'out_channels': 32, 'kernel_size': 3, 'padding': 1},
+                {'type': 'conv2d', 'in_channels': 1, 'out_channels': 16, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 16},
+                {'type': 'relu'},
+                {'type': 'conv2d', 'in_channels': 16, 'out_channels': 32, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 32},
                 {'type': 'relu'},
-                {'type': 'conv2d', 'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'padding': 1},
-                {'type': 'batchnorm2d', 'num_features': 32},
-                {'type': 'relu'},
-                {'type': 'maxpool2d', 'kernel_size': 2},
                 {'type': 'conv2d', 'in_channels': 32, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
-                {'type': 'batchnorm2d', 'num_features': 64},
-                {'type': 'relu'},
-                {'type': 'conv2d', 'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
                 {'type': 'maxpool2d', 'kernel_size': 2},
                 {'type': 'conv2d', 'in_channels': 64, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
-                {'type': 'adaptiveavgpool2d', 'output_size': (1, 1)}
+                {'type': 'conv2d', 'in_channels': 128, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 256},
+                {'type': 'relu'},
+                {'type': 'adaptiveavgpool2d', 'output_size': (2, 2)}
             ],
             'fc_layers': [
-                {'type': 'linear', 'in_features': 128, 'out_features': 256},
-                {'type': 'batchnorm1d', 'num_features': 256},
+                {'type': 'linear', 'in_features': 256*2*2, 'out_features': 512},
+                {'type': 'batchnorm1d', 'num_features': 512},
                 {'type': 'relu'},
 
             ],
-            'fc_out': 256,
+            'fc_out': 512,
             'dropout': 0.0
         },
         'top_model': {
             'layers': [
-                {'type': 'linear', 'in_features': 256, 'out_features': 128},
+                {'type': 'linear', 'in_features': 512, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
                 {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.1},
                 {'type': 'linear', 'in_features': 128, 'out_features': 64},
                 {'type': 'linear', 'in_features': 64, 'out_features': 10}
             ]
