@@ -84,6 +84,7 @@ class Server:
         self.model = TopModel(input_dim, output_dim, top_config).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         self.criterion = nn.CrossEntropyLoss()
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=20, eta_min=0.0001)
 
         # 混合精度训练配置 - 使用默认值而不是引用VFLConfig类属性
         self.use_amp = torch.cuda.is_available()  # 默认情况下，如果有CUDA则启用AMP

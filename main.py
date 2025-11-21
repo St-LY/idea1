@@ -290,6 +290,10 @@ def main():
         poison_stats = server.get_poisoning_stats()
         token_stats = server.get_token_stats()
 
+        server.scheduler.step()
+        for client in clients:
+            client.scheduler.step()
+
         print_separator(f"PRETRAINING EPOCH {epoch + 1} SUMMARY", "-")
         print_info(f"  Average Loss: {avg_loss:.4f}")
         print_info(f"  Valid Steps: {valid_steps}/{len(train_loader)}")

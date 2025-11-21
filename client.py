@@ -35,6 +35,7 @@ class Client:
         # 传递 bottom_model 配置而不是整个 dataset_config
         self.model = BottomModel(input_channels, bottom_config).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=20, eta_min=0.0001)
 
         self.crypto = CryptoUtils()
         self.server_public_key = None

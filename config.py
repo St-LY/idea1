@@ -1,4 +1,3 @@
-#file:C:\Users\24576\Desktop\thesis01\VFL框架\idea1\config.py
 import torch
 
 class DatasetConfig:
@@ -12,100 +11,34 @@ class DatasetConfig:
         'num_classes': 10,
         'bottom_model': {
             'layers': [
-                {
-                    'type': 'conv2d',
-                    'in_channels': 1,
-                    'out_channels': 32,
-                    'kernel_size': 3,
-                    'padding': 1
-                },
-                {
-                    'type': 'batchnorm2d',
-                    'num_features': 32
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'avgpool2d',
-                    'kernel_size': 2,
-                    'stride': 2
-                },
-                {
-                    'type': 'conv2d',
-                    'in_channels': 32,
-                    'out_channels': 64,
-                    'kernel_size': 3,
-                    'padding': 1
-                },
-                {
-                    'type': 'batchnorm2d',
-                    'num_features': 64
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'maxpool',
-                    'kernel_size': 2,
-                }
+                {'type': 'conv2d', 'in_channels': 1, 'out_channels': 32, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 32},
+                {'type': 'relu'},
+                {'type': 'avgpool2d', 'kernel_size': 2, 'stride': 2},
+                {'type': 'conv2d', 'in_channels': 32, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'maxpool', 'kernel_size': 2}
             ],
             'fc_layers': [
-                {
-                    'type': 'linear',
-                    'in_features': 256,  # 64*2*2
-                    'out_features': 128
-                },
-                {
-                    'type': 'batchnorm1d',
-                    'num_features': 128
-                },
-                {
-                    'type': 'relu'
-                }
+                {'type': 'linear', 'in_features': 256, 'out_features': 128},  # 64*2*2
+                {'type': 'batchnorm1d', 'num_features': 128},
+                {'type': 'relu'}
             ],
             'fc_out': 128,
             'dropout': 0.0
         },
         'top_model': {
             'layers': [
-                {
-                    'type': 'linear',
-                    'in_features': 128,  # 每个客户端输出128维特征
-                    'out_features': 64
-                },
-                {
-                    'type': 'batchnorm1d',
-                    'num_features': 64
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'dropout',
-                    'p': 0.3
-                },
-                {
-                    'type': 'linear',
-                    'in_features': 64,
-                    'out_features': 32
-                },
-                {
-                    'type': 'batchnorm1d',
-                    'num_features': 32
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'dropout',
-                    'p': 0.2
-                },
-                {
-                    'type': 'linear',
-                    'in_features': 32,
-                    'out_features': 10  # 分类数
-                }
+                {'type': 'linear', 'in_features': 128, 'out_features': 64},  # 每个客户端输出128维特征
+                {'type': 'batchnorm1d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.3},
+                {'type': 'linear', 'in_features': 64, 'out_features': 32},
+                {'type': 'batchnorm1d', 'num_features': 32},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.2},
+                {'type': 'linear', 'in_features': 32, 'out_features': 10}  # 分类数
             ]
         }
     }
@@ -158,8 +91,70 @@ class DatasetConfig:
     }
 
     # 修改 CIFAR10 的 bottom_model 配置
-    CIFAR10 =  {
+    CIFAR10 = {
         'name': 'CIFAR10',
+        'input_channels': 3,
+        'image_size': (32, 32),
+        'num_classes': 10,
+        'bottom_model': {
+            'layers': [
+                # 第一组卷积
+                {'type': 'conv2d', 'in_channels': 3, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'conv2d', 'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'maxpool2d', 'kernel_size': 2},
+
+                # 第二组卷积
+                {'type': 'conv2d', 'in_channels': 64, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 128},
+                {'type': 'relu'},
+                {'type': 'conv2d', 'in_channels': 128, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 128},
+                {'type': 'relu'},
+                {'type': 'maxpool2d', 'kernel_size': 2},
+
+                # 第三组卷积
+                {'type': 'conv2d', 'in_channels': 128, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 256},
+                {'type': 'relu'},
+                {'type': 'conv2d', 'in_channels': 256, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 256},
+                {'type': 'relu'},
+
+                {'type': 'adaptiveavgpool2d', 'output_size': (4, 4)}
+            ],
+            'fc_layers': [
+                {'type': 'linear', 'in_features': 256 * 4 * 4, 'out_features': 1024},
+                {'type': 'batchnorm1d', 'num_features': 1024},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.3}
+            ],
+            'fc_out': 1024,  # 增加到1024
+            'dropout': 0.3
+        },
+        'top_model': {
+            'layers': [
+                {'type': 'linear', 'in_features': 1024, 'out_features': 256},
+                {'type': 'batchnorm1d', 'num_features': 256},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.4},
+
+                {'type': 'linear', 'in_features': 256, 'out_features': 128},
+                {'type': 'batchnorm1d', 'num_features': 128},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.3},
+
+                {'type': 'linear', 'in_features': 128, 'out_features': 10}
+            ]
+        }
+    }
+
+    # SVHN配置 - 调整为与其它数据集一致的格式
+    SVHN = {
+        'name': 'SVHN',
         'input_channels': 3,
         'image_size': (32, 32),
         'num_classes': 10,
@@ -168,171 +163,35 @@ class DatasetConfig:
                 {'type': 'conv2d', 'in_channels': 3, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
-                {'type': 'conv2d', 'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
-                {'type': 'batchnorm2d', 'num_features': 64},
-                {'type': 'relu'},
-                {'type': 'maxpool2d', 'kernel_size': 2},
+                {'type': 'maxpool2d', 'kernel_size': 2, 'stride': 2},
                 {'type': 'conv2d', 'in_channels': 64, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
-                {'type': 'conv2d', 'in_channels': 128, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
-                {'type': 'batchnorm2d', 'num_features': 128},
-                {'type': 'relu'},
-                {'type': 'maxpool2d', 'kernel_size': 2},
+                {'type': 'maxpool2d', 'kernel_size': 2, 'stride': 2},
                 {'type': 'conv2d', 'in_channels': 128, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 256},
                 {'type': 'relu'},
-                {'type': 'conv2d', 'in_channels': 256, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
-                {'type': 'batchnorm2d', 'num_features': 256},
-                {'type': 'relu'},
-                {'type': 'maxpool2d', 'kernel_size': 2},
-                {'type': 'adaptiveavgpool2d', 'output_size': (2, 2)}  # 确保输出尺寸为2x2
+                {'type': 'adaptiveavgpool2d', 'output_size': (2, 2)}
             ],
             'fc_layers': [
-                {'type': 'linear', 'in_features': 1024, 'out_features': 512},  # 256*2*2=1024
-                {'type': 'batchnorm1d', 'num_features': 512},
-                {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.5}
-            ],
-            'fc_out': 512,
-            'dropout': 0.0
-        },
-        'top_model': {
-            'layers': [
-                {'type': 'linear', 'in_features': 512, 'out_features': 256},
+                {'type': 'linear', 'in_features': 1024, 'out_features': 256},  # 256*2*2
                 {'type': 'batchnorm1d', 'num_features': 256},
-                {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.5},
-                {'type': 'linear', 'in_features': 256, 'out_features': 128},
-                {'type': 'batchnorm1d', 'num_features': 128},
-                {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.3},
-                {'type': 'linear', 'in_features': 128, 'out_features': 10}
-            ]
-        }
-    }
-
-    # SVHN配置 - 保持不变
-    SVHN = {
-        'name': 'SVHN',
-        'input_channels': 3,
-        'image_size': (32, 32),
-        'num_classes': 10,
-        'bottom_model': {
-            'layers': [
-                {
-                    'type': 'conv2d',
-                    'in_channels': 3,
-                    'out_channels': 64,
-                    'kernel_size': 3,
-                    'padding': 1
-                },
-                {
-                    'type': 'batchnorm2d',
-                    'num_features': 64
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'maxpool2d',
-                    'kernel_size': 2,
-                    'stride': 2
-                },
-                {
-                    'type': 'conv2d',
-                    'in_channels': 64,
-                    'out_channels': 128,
-                    'kernel_size': 3,
-                    'padding': 1
-                },
-                {
-                    'type': 'batchnorm2d',
-                    'num_features': 128
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'maxpool2d',
-                    'kernel_size': 2,
-                    'stride': 2
-                },
-                {
-                    'type': 'conv2d',
-                    'in_channels': 128,
-                    'out_channels': 256,
-                    'kernel_size': 3,
-                    'padding': 1
-                },
-                {
-                    'type': 'batchnorm2d',
-                    'num_features': 256
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'adaptiveavgpool2d',
-                    'output_size': (2, 2)
-                }
-            ],
-            'fc_layers': [
-                {
-                    'type': 'linear',
-                    'in_features': 1024,  # 256*2*2
-                    'out_features': 256
-                },
-                {
-                    'type': 'batchnorm1d',
-                    'num_features': 256
-                },
-                {
-                    'type': 'relu'
-                }
+                {'type': 'relu'}
             ],
             'fc_out': 256,
             'dropout': 0.0
         },
         'top_model': {
             'layers': [
-                {
-                    'type': 'linear',
-                    'in_features': 256,
-                    'out_features': 128
-                },
-                {
-                    'type': 'batchnorm1d',
-                    'num_features': 128
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'dropout',
-                    'p': 0.3
-                },
-                {
-                    'type': 'linear',
-                    'in_features': 128,
-                    'out_features': 64
-                },
-                {
-                    'type': 'batchnorm1d',
-                    'num_features': 64
-                },
-                {
-                    'type': 'relu'
-                },
-                {
-                    'type': 'dropout',
-                    'p': 0.2
-                },
-                {
-                    'type': 'linear',
-                    'in_features': 64,
-                    'out_features': 10
-                }
+                {'type': 'linear', 'in_features': 256, 'out_features': 128},
+                {'type': 'batchnorm1d', 'num_features': 128},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.3},
+                {'type': 'linear', 'in_features': 128, 'out_features': 64},
+                {'type': 'batchnorm1d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.2},
+                {'type': 'linear', 'in_features': 64, 'out_features': 10}
             ]
         }
     }
@@ -349,8 +208,8 @@ class VFLConfig:
         self.output_dim = self.dataset_config['num_classes']  # 类别数
 
         # ========== 训练配置 ==========
-        self.batch_size = 1024  # 增大批次大小以提高GPU利用率（原256）
-        self.learning_rate = 0.001
+        self.batch_size = 512  # 增大批次大小以提高GPU利用率（原256）
+        self.learning_rate = 0.01
 
         # 训练轮数配置
         self.pretraining_epochs = 1  # 预训练轮数
