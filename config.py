@@ -140,12 +140,12 @@ class DatasetConfig:
                 {'type': 'linear', 'in_features': 1024, 'out_features': 256},
                 {'type': 'batchnorm1d', 'num_features': 256},
                 {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.4},
+                {'type': 'dropout', 'p': 0.2},
 
                 {'type': 'linear', 'in_features': 256, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
                 {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.3},
+                {'type': 'dropout', 'p': 0.1},
 
                 {'type': 'linear', 'in_features': 128, 'out_features': 10}
             ]
@@ -160,38 +160,56 @@ class DatasetConfig:
         'num_classes': 10,
         'bottom_model': {
             'layers': [
+                # 第一组卷积
                 {'type': 'conv2d', 'in_channels': 3, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
-                {'type': 'maxpool2d', 'kernel_size': 2, 'stride': 2},
+                {'type': 'conv2d', 'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'maxpool2d', 'kernel_size': 2},
+
+                # 第二组卷积
                 {'type': 'conv2d', 'in_channels': 64, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
-                {'type': 'maxpool2d', 'kernel_size': 2, 'stride': 2},
+                {'type': 'conv2d', 'in_channels': 128, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 128},
+                {'type': 'relu'},
+                {'type': 'maxpool2d', 'kernel_size': 2},
+
+                # 第三组卷积
                 {'type': 'conv2d', 'in_channels': 128, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 256},
                 {'type': 'relu'},
-                {'type': 'adaptiveavgpool2d', 'output_size': (2, 2)}
+                {'type': 'conv2d', 'in_channels': 256, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 256},
+                {'type': 'relu'},
+
+                {'type': 'adaptiveavgpool2d', 'output_size': (4, 4)}
             ],
             'fc_layers': [
-                {'type': 'linear', 'in_features': 1024, 'out_features': 256},  # 256*2*2
-                {'type': 'batchnorm1d', 'num_features': 256},
-                {'type': 'relu'}
+                {'type': 'linear', 'in_features': 256 * 4 * 4, 'out_features': 1024},
+                {'type': 'batchnorm1d', 'num_features': 1024},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.2}
             ],
-            'fc_out': 256,
-            'dropout': 0.0
+            'fc_out': 1024,  # 增加到1024
+            'dropout': 0.3
         },
         'top_model': {
             'layers': [
+                {'type': 'linear', 'in_features': 1024, 'out_features': 256},
+                {'type': 'batchnorm1d', 'num_features': 256},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.1},
+
                 {'type': 'linear', 'in_features': 256, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
                 {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.3},
-                {'type': 'linear', 'in_features': 128, 'out_features': 64},
-                {'type': 'batchnorm1d', 'num_features': 64},
-                {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.2},
-                {'type': 'linear', 'in_features': 64, 'out_features': 10}
+                {'type': 'dropout', 'p': 0.1},
+
+                {'type': 'linear', 'in_features': 128, 'out_features': 10}
             ]
         }
     }
