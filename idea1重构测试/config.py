@@ -3,6 +3,7 @@ import torch
 class DatasetConfig:
     """数据集特定配置"""
 
+
     # MNIST配置 - 保持不变
     MNIST = {
         'name': 'MNIST',

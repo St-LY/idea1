@@ -10,5 +10,6 @@ python attack_blackbox.py --vectors_file shuffle_defense_vectors/vectors/epoch_5
 python attack_blackbox.py --vectors_file shuffle_defense_vectors/vectors/epoch_5.pkl --dataset CIFAR10 --target_client 0
 
 
+
 #白盒攻击
 python attack_whitebox.py --vectors_file shuffle_defense_vectors/vectors/epoch_10.pkl --model_dir shuffle_defense_vectors/models --dataset CIFAR10 --target_client 0

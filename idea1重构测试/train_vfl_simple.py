@@ -20,6 +20,7 @@ from models import BottomModel, TopModel
 from config import VFLConfig
 
 
+
 class SimplifiedClient:
     """简化的客户端(不使用加密和签名)"""
     def __init__(self, client_id, input_channels, dataset_config):

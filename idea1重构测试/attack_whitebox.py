@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from skimage.metrics import structural_similarity as compare_ssim
 
 
+
 def get_psnr(img1, img2, peak=1.0):
     """计算PSNR"""
     mse = np.mean((img1 - img2) ** 2)

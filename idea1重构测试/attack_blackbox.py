@@ -52,6 +52,7 @@ def get_ssim(img1, img2):
 class DecoderNetwork(nn.Module):
     """反向解码器网络 - 从中间特征重构原始输入"""
 
+
     def __init__(self, feature_dim, output_channels, output_size):
         """
         Args:
