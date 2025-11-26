@@ -18,7 +18,8 @@ class DatasetConfig:
                 {'type': 'conv2d', 'in_channels': 32, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
-                {'type': 'maxpool', 'kernel_size': 2}
+                {'type': 'maxpool', 'kernel_size': 2},
+                {'type': 'adaptiveavgpool2d', 'output_size': (2, 2)}
             ],
             'fc_layers': [
                 {'type': 'linear', 'in_features': 256, 'out_features': 128},  # 64*2*2
@@ -192,7 +193,7 @@ class DatasetConfig:
                 {'type': 'linear', 'in_features': 256 * 4 * 4, 'out_features': 1024},
                 {'type': 'batchnorm1d', 'num_features': 1024},
                 {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.2}
+                {'type': 'dropout', 'p': 0.3}
             ],
             'fc_out': 1024,  # 增加到1024
             'dropout': 0.3
@@ -202,7 +203,7 @@ class DatasetConfig:
                 {'type': 'linear', 'in_features': 1024, 'out_features': 256},
                 {'type': 'batchnorm1d', 'num_features': 256},
                 {'type': 'relu'},
-                {'type': 'dropout', 'p': 0.1},
+                {'type': 'dropout', 'p': 0.2},
 
                 {'type': 'linear', 'in_features': 256, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
