@@ -133,21 +133,30 @@ class Client:
     def _compute_and_sign(self, data, batch_idx, epoch, phase):
         """计算中间结果并签名（内部方法）"""
         try:
+            # 获取批次信息
+            batch_info = self.token_manager.get_batch_info()
+            if batch_info is None:
+                print(f"[Client {self.client_id}] Error: No batch info available")
+                return None
+
             # 计算中间结果
             intermediate = self.compute_intermediate(data)
 
-            # 生成令牌证明
+            # 生成消息数据（包含批次信息）
             message_data = {
                 'batch_idx': batch_idx,
                 'epoch': epoch,
                 'phase': phase,
                 'client_id': self.client_id,
-                'timestamp': time.time()
+                'timestamp': time.time(),
+                'counter': batch_info['counter'],  # 添加批次号
+                'round_id': batch_info['round_id']  # 添加轮次号
             }
 
+            # 生成令牌证明
             token_proof = self.token_manager.generate_token_proof(message_data)
 
-            # 签名（包含令牌证明）
+            # 签名（包含令牌证明和批次信息）
             signature = self.ring_signature({
                 'intermediate': intermediate,
                 'batch_idx': batch_idx,
@@ -155,7 +164,9 @@ class Client:
                 'phase': phase,
                 'client_id': self.client_id,
                 'timestamp': message_data['timestamp'],
-                'token_proof': token_proof
+                'token_proof': token_proof,
+                'counter': batch_info['counter'],  # 消息中也包含批次号
+                'round_id': batch_info['round_id']  # 消息中也包含轮次号
             })
 
             # 传递令牌给下一个客户端
@@ -264,7 +275,7 @@ class Client:
         else:
             message = {'data': message, 'timestamp': time.time()}
 
-        # 生成唯一的密钥镜像
+        # 生成唯一的密钥镜像（包含批次信息以确保唯一性）
         key_image = self._generate_key_image(message)
 
         # 加密中间结果
@@ -304,14 +315,20 @@ class Client:
         return signed_data
 
     def _generate_key_image(self, message):
-        """生成密钥镜像"""
+        """生成密钥镜像（包含批次信息）"""
         private_key_bytes = self.rsa_private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
 
-        context_str = f"{message.get('epoch', 0)}_{message.get('batch_idx', 0)}_{message.get('phase', 'unknown')}_{message.get('client_id', self.client_id)}"
+        # 包含更多上下文信息，包括批次号和轮次号
+        context_str = (f"{message.get('epoch', 0)}_"
+                      f"{message.get('batch_idx', 0)}_"
+                      f"{message.get('phase', 'unknown')}_"
+                      f"{message.get('client_id', self.client_id)}_"
+                      f"{message.get('counter', 0)}_"
+                      f"{message.get('round_id', 0)}")
         context_bytes = context_str.encode('utf-8')
 
         combined = private_key_bytes + context_bytes
@@ -334,11 +351,11 @@ class Client:
         return signed_data
 
     def pass_token_to_next(self, token_data):
-        """传递令牌给下一个客户端"""
+        """传递令牌给下一个客户端（根据令牌中记录的顺序）"""
         if not hasattr(self, 'all_clients') or not self.all_clients:
             return
 
-        next_client_id = (self.client_id + 1) % len(self.all_clients)
+        next_client_id = token_data['to_client']
         next_client = self.all_clients[next_client_id]
         next_client.receive_token(token_data)
 

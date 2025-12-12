@@ -93,13 +93,9 @@ class Server:
             self.scaler = torch.cuda.amp.GradScaler()
             print(f"Mixed precision training enabled")
 
-        # ... 其余代码保持不变 ...
-
         # 梯度累积配置 - 使用默认值
         self.gradient_accumulation_steps = 1
         self.accumulation_counter = 0
-
-        # ... 其余代码保持不变 ...
 
         # 生成RSA密钥对
         self.crypto = CryptoUtils()
@@ -190,13 +186,15 @@ class Server:
             if token_proof is None:
                 return False, "No token proof provided"
 
-            # 构建验证用的消息数据
+            # 构建验证用的消息数据（包含批次信息）
             message_data = {
                 'batch_idx': message.get('batch_idx'),
                 'epoch': message.get('epoch'),
                 'phase': message.get('phase'),
                 'client_id': message.get('client_id'),
-                'timestamp': message.get('timestamp')
+                'timestamp': message.get('timestamp'),
+                'counter': message.get('counter'),  # 批次号
+                'round_id': message.get('round_id')  # 轮次号
             }
 
             # 验证令牌证明
@@ -289,10 +287,16 @@ class Server:
 
     def process_encrypted_messages(self, signed_messages):
         """
-        处理签名消息：先验证令牌，再验证签名，最后累加
+        处理签名消息：先验证批次一致性，再验证令牌，再验证签名，最后累加
 
         使用累加方式：所有客户端的中间结果相加
         """
+        # 首先验证批次一致性
+        is_consistent, reason = self.token_verifier.verify_batch_consistency(signed_messages)
+        if not is_consistent:
+            print(f"[Warning] Batch consistency check failed: {reason}")
+            # 仍然继续处理，但会记录警告
+
         accumulated_intermediate = None
         valid_count = 0
 
