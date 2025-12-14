@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 import time
 import secrets
@@ -11,11 +12,12 @@ from config import VFLConfig
 import matplotlib.pyplot as plt
 import sys
 
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='VFL Training with Multiple Dataset Support')
     parser.add_argument('--dataset', type=str, default='MNIST',
-                        choices=['MNIST', 'CIFAR10', 'FashionMNIST', 'SVHN'],
+                        choices=['MNIST', 'CIFAR10', 'FashionMNIST', 'SVHN', 'NUS_WIDE'],
                         help='Dataset to use for training')
     parser.add_argument('--num_parties', type=int, default=5,
                         help='Number of parties')
@@ -45,6 +47,18 @@ def print_info(message):
     """打印信息并立即刷新"""
     print(message)
     sys.stdout.flush()
+
+
+def compute_accuracy_multilabel(predictions, labels, threshold=0.5):
+    """计算多标签分类准确率（用于NUS-WIDE）"""
+    # 应用sigmoid并阈值化
+    preds = (torch.sigmoid(predictions) > threshold).float()
+
+    # 计算Hamming准确率
+    correct = (preds == labels).float()
+    accuracy = correct.mean()
+
+    return accuracy.item()
 
 
 def monitor_token_timeouts(clients, stop_event):
@@ -143,14 +157,20 @@ def main():
     chain_master_secret = secrets.token_bytes(32)
     print_info(f"Generated chain master secret")
 
-    # 在main.py中找到服务器初始化部分，确保使用正确的输入维度
+    # 初始化服务器
     server = Server(
-        config.top_model_input_dim,  # 确保这个值正确
+        config.top_model_input_dim,
         config.output_dim,
         config.learning_rate,
         num_clients=config.num_parties,
         dataset_config=config.dataset_config
     )
+
+    # 如果是NUS-WIDE，使用BCEWithLogitsLoss进行多标签分类
+    if args.dataset == 'NUS_WIDE':
+        print_info("Using BCEWithLogitsLoss for multi-label classification")
+        server.criterion = nn.BCEWithLogitsLoss()
+
     server.initialize_token_verifier(chain_master_secret)
 
     clients = []
@@ -179,7 +199,6 @@ def main():
         print_info(f"Client {i} initialized")
 
     # 为每个客户端设置环公钥和客户端引用
-    # 为每个客户端设置环公钥和客户端引用
     for client in clients:
         client.set_ring_public_keys(client_public_keys_pem.copy())
         client.set_all_clients(clients)
@@ -191,13 +210,16 @@ def main():
         if args.dataset == 'MNIST' or args.dataset == 'FashionMNIST':
             # 灰度图像使用1个通道
             test_input = torch.randn(2, 1, 28, 28).to(config.device)
+        elif args.dataset == 'NUS_WIDE':
+            # NUS-WIDE使用伪图像表示
+            test_input = torch.randn(2, 1, 26, 26).to(config.device)
         else:
             # 彩色图像使用3个通道
-            test_input = torch.randn(2, 3, 32, 32).to(config.device)  # 使用2个样本
-        client.model.eval()  # 设置为评估模式
-        with torch.no_grad():  # 不计算梯度
+            test_input = torch.randn(2, 3, 32, 32).to(config.device)
+        client.model.eval()
+        with torch.no_grad():
             test_output = client.model(test_input)
-        client.model.train()  # 恢复训练模式
+        client.model.train()
         print(f"Client {i} output dim: {test_output.shape[1]}")
 
     # 启动所有客户端的并行处理线程
@@ -264,7 +286,12 @@ def main():
                 pretraining_losses.append(loss)
 
                 if batch_idx % 50 == 0:
-                    accuracy = server.compute_accuracy(predictions, batch_labels)
+                    # 根据数据集类型计算准确率
+                    if args.dataset == 'NUS_WIDE':
+                        accuracy = compute_accuracy_multilabel(predictions, batch_labels)
+                    else:
+                        accuracy = server.compute_accuracy(predictions, batch_labels)
+
                     batch_time = time.time() - batch_start_time
                     batch_times.append(batch_time)
                     poison_stats = server.get_poisoning_stats()
@@ -342,7 +369,12 @@ def main():
                 train_losses.append(loss)
 
                 if batch_idx % 50 == 0:
-                    accuracy = server.compute_accuracy(predictions, batch_labels)
+                    # 根据数据集类型计算准确率
+                    if args.dataset == 'NUS_WIDE':
+                        accuracy = compute_accuracy_multilabel(predictions, batch_labels)
+                    else:
+                        accuracy = server.compute_accuracy(predictions, batch_labels)
+
                     batch_time = time.time() - batch_start_time
                     batch_times.append(batch_time)
                     poison_stats = server.get_poisoning_stats()
@@ -520,18 +552,33 @@ def main():
     test_labels = torch.cat(test_labels_list, dim=0)
 
     test_time = time.time() - test_start_time
-    test_accuracy = trained_server.compute_accuracy(test_predictions, test_labels)
 
-    _, predicted = torch.max(test_predictions.data, 1)
-    correct = (predicted == test_labels).sum().item()
-    total = test_labels.size(0)
+    # 根据数据集类型计算准确率
+    if args.dataset == 'NUS_WIDE':
+        test_accuracy = compute_accuracy_multilabel(test_predictions, test_labels)
+        # 计算多标签的详细指标
+        pred_labels = (torch.sigmoid(test_predictions) > 0.5).float()
+        correct_samples = (pred_labels == test_labels).all(dim=1).sum().item()
+        total = test_labels.size(0)
+        exact_match = correct_samples / total
+    else:
+        test_accuracy = trained_server.compute_accuracy(test_predictions, test_labels)
+        _, predicted = torch.max(test_predictions.data, 1)
+        correct = (predicted == test_labels).sum().item()
+        total = test_labels.size(0)
 
     print_separator("TEST RESULTS", "-")
     print_info(f"  Dataset: {args.dataset}")
     print_info(f"  Test Time: {test_time:.2f}s")
-    print_info(f"  Throughput: {total / test_time:.0f} samples/sec")
-    print_info(f"  Accuracy: {test_accuracy:.4f} ({test_accuracy * 100:.2f}%)")
-    print_info(f"  Correct: {correct}/{total}")
+    print_info(f"  Throughput: {len(test_labels) / test_time:.0f} samples/sec")
+
+    if args.dataset == 'NUS_WIDE':
+        print_info(f"  Hamming Accuracy: {test_accuracy:.4f} ({test_accuracy * 100:.2f}%)")
+        print_info(f"  Exact Match Ratio: {exact_match:.4f} ({exact_match * 100:.2f}%)")
+        print_info(f"  Total Samples: {total}")
+    else:
+        print_info(f"  Accuracy: {test_accuracy:.4f} ({test_accuracy * 100:.2f}%)")
+        print_info(f"  Correct: {correct}/{total}")
 
     if config.use_cuda:
         print_separator("GPU MEMORY STATISTICS", "-")
@@ -540,7 +587,7 @@ def main():
 
     print_separator("ALL TASKS COMPLETED! ✓", "=")
     print_info(f"\n🎉 Training on {args.dataset} finished!")
-    print_info("📁 Models saved in current directory")
+    print_info("💾 Models saved in current directory")
     print_info("📊 Loss curves saved\n")
 
 

@@ -83,7 +83,16 @@ class Server:
 
         self.model = TopModel(input_dim, output_dim, top_config).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-        self.criterion = nn.CrossEntropyLoss()
+
+        # ✅ 修改：根据数据集类型选择损失函数
+        if dataset_config and dataset_config.get('is_multilabel', False):
+            self.criterion = nn.BCEWithLogitsLoss()
+            self.is_multilabel = True
+            print("Server: Using BCEWithLogitsLoss for multi-label classification")
+        else:
+            self.criterion = nn.CrossEntropyLoss()
+            self.is_multilabel = False
+
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=20, eta_min=0.0001)
 
         # 混合精度训练配置 - 使用默认值而不是引用VFLConfig类属性
@@ -446,12 +455,25 @@ class Server:
         self.reference_vectors = {}
         self.reference_avg_distances = {}
 
+        # ✅ 动态获取向量维度
+        vector_dim = None
+        for label in range(self.output_dim):
+            if len(self.label_vectors[label]) > 0:
+                vector_dim = self.label_vectors[label][0].shape[0]
+                break
+
+        # ✅ 如果没有找到任何向量，使用模型输入维度
+        if vector_dim is None:
+            vector_dim = self.model.network[0].in_features
+            print(f"[Warning] No vectors found, using model input dim: {vector_dim}")
+
         for label in range(self.output_dim):
             vectors = self.label_vectors[label]
 
             if len(vectors) == 0:
                 print(f"[Warning] No vectors for label {label}")
-                self.reference_vectors[label] = torch.zeros(128).to(self.device)
+                # ✅ 使用动态获取的维度
+                self.reference_vectors[label] = torch.zeros(vector_dim).to(self.device)
                 self.reference_avg_distances[label] = 0.0
                 continue
 
@@ -489,17 +511,33 @@ class Server:
         else:
             predictions = self.model(accumulated_intermediate)
 
-        _, predicted_labels = torch.max(predictions.data, 1)
+        # ✅ 修改：支持多标签分类
+        is_multilabel = hasattr(self, 'is_multilabel') and self.is_multilabel
+
+        if not is_multilabel:
+            _, predicted_labels = torch.max(predictions.data, 1)
 
         should_train_flags = []
         for i in range(len(labels)):
             sample_vector = accumulated_intermediate[i]
-            true_label = labels[i].item()
+
+            # ✅ 根据数据类型处理标签
+            if is_multilabel:
+                # 多标签：使用第一个正类或预测最高类
+                true_label_indices = torch.where(labels[i] == 1)[0]
+                if len(true_label_indices) > 0:
+                    true_label = true_label_indices[0].item()
+                else:
+                    true_label = torch.argmax(predictions[i]).item()
+                predicted_label = torch.argmax(predictions[i]).item()
+            else:
+                # 单标签：原有逻辑
+                true_label = labels[i].item()
+                predicted_label = predicted_labels[i].item()
 
             if self.is_pretraining:
                 should_train = self.update_label_vectors_pretraining(sample_vector, true_label)
             else:
-                predicted_label = predicted_labels[i].item()
                 should_train = self.check_vector_formal_training(sample_vector, predicted_label)
 
             should_train_flags.append(should_train)
@@ -524,6 +562,12 @@ class Server:
 
     def compute_accuracy(self, predictions, labels):
         """计算准确率"""
+        # ✅ 支持多标签分类
+        if hasattr(self, 'is_multilabel') and self.is_multilabel:
+            preds = (torch.sigmoid(predictions) > 0.5).float()
+            correct = (preds == labels).float()
+            return correct.mean().item()
+
         _, predicted = torch.max(predictions.data, 1)
         total = labels.size(0)
         correct = (predicted == labels).sum().item()

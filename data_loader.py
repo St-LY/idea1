@@ -1,3 +1,4 @@
+# file: data_loader.py
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -6,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from numba import jit, prange
 import warnings
+import os
 
 warnings.filterwarnings('ignore')
 
@@ -31,13 +33,22 @@ class VFLDataset(Dataset):
             print(f"Preloading {self.num_parties} parties' data to GPU...")
             self.party_data = [torch.tensor(data, dtype=torch.float32).to(device)
                                for data in party_data_list]
-            self.labels = torch.tensor(labels, dtype=torch.long).to(device)
+
+            # 根据标签类型选择数据类型
+            if labels.dtype == np.float32 or labels.dtype == np.float64:
+                self.labels = torch.tensor(labels, dtype=torch.float32).to(device)
+            else:
+                self.labels = torch.tensor(labels, dtype=torch.long).to(device)
             print("Data preloaded to GPU successfully!")
         else:
             # 保持在CPU,转换为tensor
             self.party_data = [torch.tensor(data, dtype=torch.float32)
                                for data in party_data_list]
-            self.labels = torch.tensor(labels, dtype=torch.long)
+
+            if labels.dtype == np.float32 or labels.dtype == np.float64:
+                self.labels = torch.tensor(labels, dtype=torch.float32)
+            else:
+                self.labels = torch.tensor(labels, dtype=torch.long)
 
     def __len__(self):
         return len(self.labels)
@@ -84,6 +95,8 @@ class MultiDatasetLoader:
             return self._load_fashion_mnist(num_parties)
         elif self.dataset_name == 'SVHN':
             return self._load_svhn(num_parties)
+        elif self.dataset_name == 'NUS_WIDE':
+            return self._load_nus_wide(num_parties)
         else:
             raise ValueError(f"Unsupported dataset: {self.dataset_name}")
 
@@ -148,6 +161,234 @@ class MultiDatasetLoader:
         test_dataset = datasets.SVHN(root='./data', split='test', download=True, transform=transform)
 
         return self._process_dataset(train_dataset, test_dataset, num_parties)
+
+    def _load_nus_wide(self, num_parties):
+        """
+        加载NUS-WIDE数据集
+
+        数据集结构预期：
+        ./data/NUS-WIDE/
+            ├── features/
+            │   └── CH_features.npy (634维颜色直方图特征)
+            └── labels/
+                └── labels.npy (81个类别的多标签)
+        """
+        print(f"Loading {self.dataset_name} dataset...")
+
+        data_root = './data/NUS-WIDE'
+
+        # 检查数据集是否存在，如果不存在则生成合成数据
+        if not os.path.exists(data_root):
+            print(f"NUS-WIDE dataset not found at {data_root}")
+            print("Generating synthetic data for testing...")
+            return self._generate_synthetic_nus_wide(num_parties)
+
+        # 尝试加载特征
+        feature_file = os.path.join(data_root, 'features', 'CH_features.npy')
+        if not os.path.exists(feature_file):
+            # 尝试其他可能的路径
+            alt_paths = [
+                os.path.join(data_root, 'NUS_WID_Low_Level_Features', 'Low_Level_Features', 'CH_Train.dat'),
+                os.path.join(data_root, 'CH_features.npy'),
+            ]
+
+            feature_file = None
+            for path in alt_paths:
+                if os.path.exists(path):
+                    feature_file = path
+                    break
+
+            if feature_file is None:
+                print("Feature file not found. Generating synthetic data...")
+                return self._generate_synthetic_nus_wide(num_parties)
+
+        # 加载特征
+        try:
+            if feature_file.endswith('.dat'):
+                features = self._load_dat_file(feature_file)
+            else:
+                features = np.load(feature_file)
+        except Exception as e:
+            print(f"Error loading features: {e}")
+            print("Generating synthetic data for testing...")
+            return self._generate_synthetic_nus_wide(num_parties)
+
+        # 加载标签
+        label_file = os.path.join(data_root, 'labels', 'labels.npy')
+        if not os.path.exists(label_file):
+            # 尝试其他可能的路径
+            alt_label_paths = [
+                os.path.join(data_root, 'Concepts81.txt'),
+                os.path.join(data_root, 'labels.npy'),
+            ]
+
+            label_file = None
+            for path in alt_label_paths:
+                if os.path.exists(path):
+                    label_file = path
+                    break
+
+            if label_file is None:
+                print("Label file not found. Generating synthetic data...")
+                return self._generate_synthetic_nus_wide(num_parties)
+
+        try:
+            if label_file.endswith('.txt'):
+                labels = self._load_concept_labels(label_file)
+            else:
+                labels = np.load(label_file)
+        except Exception as e:
+            print(f"Error loading labels: {e}")
+            print("Generating synthetic data for testing...")
+            return self._generate_synthetic_nus_wide(num_parties)
+
+        # 数据预处理和分割
+        return self._process_nus_wide_data(features, labels, num_parties)
+
+    def _generate_synthetic_nus_wide(self, num_parties):
+        """生成合成的NUS-WIDE数据用于测试"""
+        print("=" * 80)
+        print("Generating Synthetic NUS-WIDE Dataset".center(80))
+        print("=" * 80)
+
+        n_train = 10000
+        n_test = 2000
+        n_features = 634  # CH特征维度
+        n_classes = 81
+
+        print(f"Configuration:")
+        print(f"  Training samples: {n_train}")
+        print(f"  Test samples: {n_test}")
+        print(f"  Feature dimension: {n_features}")
+        print(f"  Number of classes: {n_classes}")
+        print(f"  Multi-label: Yes (3-5 labels per sample)")
+
+        # 生成合成特征
+        train_features = np.random.randn(n_train, n_features).astype(np.float32)
+        test_features = np.random.randn(n_test, n_features).astype(np.float32)
+
+        # 生成合成多标签（每个样本平均3-5个标签）
+        train_labels = np.zeros((n_train, n_classes), dtype=np.float32)
+        test_labels = np.zeros((n_test, n_classes), dtype=np.float32)
+
+        for i in range(n_train):
+            n_labels = np.random.randint(3, 6)
+            label_indices = np.random.choice(n_classes, n_labels, replace=False)
+            train_labels[i, label_indices] = 1.0
+
+        for i in range(n_test):
+            n_labels = np.random.randint(3, 6)
+            label_indices = np.random.choice(n_classes, n_labels, replace=False)
+            test_labels[i, label_indices] = 1.0
+
+        print(f"\n✓ Synthetic data generated successfully!")
+        print("=" * 80 + "\n")
+
+        return self._process_nus_wide_data(train_features, train_labels, num_parties,
+                                           test_features, test_labels)
+
+    def _process_nus_wide_data(self, train_features, train_labels, num_parties,
+                               test_features=None, test_labels=None):
+        """处理NUS-WIDE数据"""
+
+        # 如果没有提供测试集，则分割训练集
+        if test_features is None or test_labels is None:
+            train_features, test_features, train_labels, test_labels = train_test_split(
+                train_features, train_labels, test_size=0.2, random_state=42
+            )
+
+        print(f"Processing NUS-WIDE data:")
+        print(f"  Train samples: {len(train_features)}")
+        print(f"  Test samples: {len(test_features)}")
+        print(f"  Feature dimension: {train_features.shape[1]}")
+        print(f"  Number of classes: {train_labels.shape[1]}")
+
+        # 特征标准化
+        print("  Standardizing features...")
+        mean = np.mean(train_features, axis=0)
+        std = np.std(train_features, axis=0)
+        std[std < 1e-8] = 1.0
+
+        train_features = (train_features - mean) / std
+        test_features = (test_features - mean) / std
+
+        # 垂直分割文本特征给不同参与方
+        print("  Splitting features vertically across parties...")
+        train_text_party = self._split_features_vertically(train_features, num_parties)
+        test_text_party = self._split_features_vertically(test_features, num_parties)
+
+        # 创建伪图像表示（将1D特征reshape成2D）
+        print("  Creating pseudo-image representations...")
+        train_image_party = []
+        test_image_party = []
+
+        for i in range(num_parties):
+            # 将1D特征reshape成2D "图像"
+            party_dim = train_text_party[i].shape[1]
+            side_len = int(np.ceil(np.sqrt(party_dim)))
+
+            # Padding到平方数
+            pad_dim = side_len * side_len
+
+            train_padded = np.pad(train_text_party[i],
+                                  ((0, 0), (0, pad_dim - party_dim)),
+                                  mode='constant')
+            test_padded = np.pad(test_text_party[i],
+                                 ((0, 0), (0, pad_dim - party_dim)),
+                                 mode='constant')
+
+            # Reshape成伪图像格式 (N, 1, H, W)
+            train_img = train_padded.reshape(-1, 1, side_len, side_len)
+            test_img = test_padded.reshape(-1, 1, side_len, side_len)
+
+            train_image_party.append(train_img)
+            test_image_party.append(test_img)
+
+            print(f"    Party {i}: {train_text_party[i].shape[1]} features → {side_len}x{side_len} image")
+
+        features_per_party = [party.shape[1:] for party in train_image_party]
+
+        print(f"\n✓ NUS-WIDE data processing completed!")
+
+        return train_image_party, test_image_party, train_labels, test_labels, features_per_party
+
+    def _split_features_vertically(self, features, num_parties):
+        """垂直分割特征"""
+        n_samples, n_features = features.shape
+        features_per_party = n_features // num_parties
+        remainder = n_features % num_parties
+
+        party_data = []
+        start_idx = 0
+
+        for i in range(num_parties):
+            end_idx = start_idx + features_per_party
+            if i < remainder:
+                end_idx += 1
+
+            party_features = features[:, start_idx:end_idx].copy()
+            party_data.append(party_features)
+            start_idx = end_idx
+
+        return party_data
+
+    def _load_dat_file(self, filepath):
+        """加载.dat格式的特征文件"""
+        features = []
+        with open(filepath, 'r') as f:
+            for line in f:
+                values = line.strip().split()
+                features.append([float(v) for v in values])
+        return np.array(features, dtype=np.float32)
+
+    def _load_concept_labels(self, filepath):
+        """加载81个概念标签"""
+        labels = []
+        with open(filepath, 'r') as f:
+            for line in f:
+                values = line.strip().split()
+                labels.append([int(v) for v in values])
+        return np.array(labels, dtype=np.float32)
 
     def _process_dataset(self, train_dataset, test_dataset, num_parties):
         """处理数据集：转换格式、分割、标准化"""

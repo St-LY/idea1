@@ -1,5 +1,6 @@
 import torch
 
+
 class DatasetConfig:
     """数据集特定配置"""
 
@@ -22,7 +23,7 @@ class DatasetConfig:
                 {'type': 'adaptiveavgpool2d', 'output_size': (2, 2)}
             ],
             'fc_layers': [
-                {'type': 'linear', 'in_features': 256, 'out_features': 128},  # 64*2*2
+                {'type': 'linear', 'in_features': 256, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
                 {'type': 'relu'}
             ],
@@ -31,7 +32,7 @@ class DatasetConfig:
         },
         'top_model': {
             'layers': [
-                {'type': 'linear', 'in_features': 128, 'out_features': 64},  # 每个客户端输出128维特征
+                {'type': 'linear', 'in_features': 128, 'out_features': 64},
                 {'type': 'batchnorm1d', 'num_features': 64},
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.3},
@@ -39,7 +40,7 @@ class DatasetConfig:
                 {'type': 'batchnorm1d', 'num_features': 32},
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.2},
-                {'type': 'linear', 'in_features': 32, 'out_features': 10}  # 分类数
+                {'type': 'linear', 'in_features': 32, 'out_features': 10}
             ]
         }
     }
@@ -67,10 +68,9 @@ class DatasetConfig:
                 {'type': 'adaptiveavgpool2d', 'output_size': (4, 4)}
             ],
             'fc_layers': [
-                {'type': 'linear', 'in_features': 256*4*4, 'out_features': 512},
+                {'type': 'linear', 'in_features': 256 * 4 * 4, 'out_features': 512},
                 {'type': 'batchnorm1d', 'num_features': 512},
                 {'type': 'relu'},
-
             ],
             'fc_out': 512,
             'dropout': 0.0
@@ -86,12 +86,10 @@ class DatasetConfig:
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.1},
                 {'type': 'linear', 'in_features': 32, 'out_features': 10}
-
             ]
         }
     }
 
-    # 修改 CIFAR10 的 bottom_model 配置
     CIFAR10 = {
         'name': 'CIFAR10',
         'input_channels': 3,
@@ -99,7 +97,6 @@ class DatasetConfig:
         'num_classes': 10,
         'bottom_model': {
             'layers': [
-                # 第一组卷积
                 {'type': 'conv2d', 'in_channels': 3, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
@@ -107,8 +104,6 @@ class DatasetConfig:
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
                 {'type': 'maxpool2d', 'kernel_size': 2},
-
-                # 第二组卷积
                 {'type': 'conv2d', 'in_channels': 64, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
@@ -116,15 +111,12 @@ class DatasetConfig:
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
                 {'type': 'maxpool2d', 'kernel_size': 2},
-
-                # 第三组卷积
                 {'type': 'conv2d', 'in_channels': 128, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 256},
                 {'type': 'relu'},
                 {'type': 'conv2d', 'in_channels': 256, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 256},
                 {'type': 'relu'},
-
                 {'type': 'adaptiveavgpool2d', 'output_size': (4, 4)}
             ],
             'fc_layers': [
@@ -133,7 +125,7 @@ class DatasetConfig:
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.3}
             ],
-            'fc_out': 1024,  # 增加到1024
+            'fc_out': 1024,
             'dropout': 0.3
         },
         'top_model': {
@@ -142,18 +134,15 @@ class DatasetConfig:
                 {'type': 'batchnorm1d', 'num_features': 256},
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.2},
-
                 {'type': 'linear', 'in_features': 256, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.1},
-
                 {'type': 'linear', 'in_features': 128, 'out_features': 10}
             ]
         }
     }
 
-    # SVHN配置 - 调整为与其它数据集一致的格式
     SVHN = {
         'name': 'SVHN',
         'input_channels': 3,
@@ -161,7 +150,6 @@ class DatasetConfig:
         'num_classes': 10,
         'bottom_model': {
             'layers': [
-                # 第一组卷积
                 {'type': 'conv2d', 'in_channels': 3, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
@@ -169,8 +157,6 @@ class DatasetConfig:
                 {'type': 'batchnorm2d', 'num_features': 64},
                 {'type': 'relu'},
                 {'type': 'maxpool2d', 'kernel_size': 2},
-
-                # 第二组卷积
                 {'type': 'conv2d', 'in_channels': 64, 'out_channels': 128, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
@@ -178,15 +164,12 @@ class DatasetConfig:
                 {'type': 'batchnorm2d', 'num_features': 128},
                 {'type': 'relu'},
                 {'type': 'maxpool2d', 'kernel_size': 2},
-
-                # 第三组卷积
                 {'type': 'conv2d', 'in_channels': 128, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 256},
                 {'type': 'relu'},
                 {'type': 'conv2d', 'in_channels': 256, 'out_channels': 256, 'kernel_size': 3, 'padding': 1},
                 {'type': 'batchnorm2d', 'num_features': 256},
                 {'type': 'relu'},
-
                 {'type': 'adaptiveavgpool2d', 'output_size': (4, 4)}
             ],
             'fc_layers': [
@@ -195,7 +178,7 @@ class DatasetConfig:
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.3}
             ],
-            'fc_out': 1024,  # 增加到1024
+            'fc_out': 1024,
             'dropout': 0.3
         },
         'top_model': {
@@ -204,18 +187,69 @@ class DatasetConfig:
                 {'type': 'batchnorm1d', 'num_features': 256},
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.2},
-
                 {'type': 'linear', 'in_features': 256, 'out_features': 128},
                 {'type': 'batchnorm1d', 'num_features': 128},
                 {'type': 'relu'},
                 {'type': 'dropout', 'p': 0.1},
-
                 {'type': 'linear', 'in_features': 128, 'out_features': 10}
             ]
         }
     }
 
-# VFLConfig类保持不变...
+    # NUS-WIDE 多模态数据集配置
+    NUS_WIDE = {
+        'name': 'NUS_WIDE',
+        'input_channels': 1,  # 伪图像通道数
+        'image_size': (26, 26),  # 伪图像大小（根据特征维度计算）
+        'num_classes': 81,
+        'is_multimodal': True,
+        'is_multilabel': True,
+        'feature_dim': 634,
+
+        # 底部模型配置（处理文本特征的伪图像表示）
+        'bottom_model': {
+            'layers': [
+                {'type': 'conv2d', 'in_channels': 1, 'out_channels': 32, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 32},
+                {'type': 'relu'},
+                {'type': 'maxpool2d', 'kernel_size': 2},
+                {'type': 'conv2d', 'in_channels': 32, 'out_channels': 64, 'kernel_size': 3, 'padding': 1},
+                {'type': 'batchnorm2d', 'num_features': 64},
+                {'type': 'relu'},
+                {'type': 'maxpool2d', 'kernel_size': 2},
+                {'type': 'adaptiveavgpool2d', 'output_size': (4, 4)}
+            ],
+            'fc_layers': [
+                {'type': 'linear', 'in_features': 64 * 4 * 4, 'out_features': 512},
+                {'type': 'batchnorm1d', 'num_features': 512},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.4},
+                {'type': 'linear', 'in_features': 512, 'out_features': 256},
+                {'type': 'batchnorm1d', 'num_features': 256},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.3}
+            ],
+            'fc_out': 256,
+            'dropout': 0.3
+        },
+
+        # Top model配置（多标签分类）
+        'top_model': {
+            'layers': [
+                {'type': 'linear', 'in_features': 256, 'out_features': 512},
+                {'type': 'batchnorm1d', 'num_features': 512},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.4},
+                {'type': 'linear', 'in_features': 512, 'out_features': 256},
+                {'type': 'batchnorm1d', 'num_features': 256},
+                {'type': 'relu'},
+                {'type': 'dropout', 'p': 0.3},
+                {'type': 'linear', 'in_features': 256, 'out_features': 81}
+            ]
+        }
+    }
+
+
 class VFLConfig:
     def __init__(self, dataset_name='MNIST'):
         # ========== 数据集配置 ==========
@@ -223,64 +257,53 @@ class VFLConfig:
         self.dataset_config = self._get_dataset_config(dataset_name)
 
         # ========== 基础配置 ==========
-        self.num_parties = 5  # 参与方数量
-        self.output_dim = self.dataset_config['num_classes']  # 类别数
+        self.num_parties = 5
+        self.output_dim = self.dataset_config['num_classes']
 
         # ========== 训练配置 ==========
-        self.batch_size = 512  # 增大批次大小以提高GPU利用率（原256）
+        self.batch_size = 512
         self.learning_rate = 0.01
 
-        # 训练轮数配置
-        self.pretraining_epochs = 1  # 预训练轮数
-        self.epochs = 5  # 正式训练轮数
+        self.pretraining_epochs = 1
+        self.epochs = 5
 
-        # 特征维度（所有数据集统一使用累加方式）
         self.top_model_input_dim = self.dataset_config['bottom_model']['fc_out']
 
         # ========== 防投毒配置 ==========
-        self.max_vectors_per_label = 300  # 每个标签最多存储的向量数
-        self.distance_threshold_multiplier = 1.2  # 距离阈值倍数
+        self.max_vectors_per_label = 300
+        self.distance_threshold_multiplier = 1.2
 
         # ========== CUDA配置 ==========
         self.use_cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if self.use_cuda else "cpu")
 
         # ========== GPU优化配置 ==========
-        # DataLoader优化
-        self.pin_memory = True  # 启用固定内存以加速数据传输
-        self.num_workers = 4  # DataLoader工作进程数
-        self.prefetch_factor = 3  # 预加载批次数
-        self.persistent_workers = True  # 保持worker进程存活
+        self.pin_memory = True
+        self.num_workers = 4
+        self.prefetch_factor = 3
+        self.persistent_workers = True
 
-        # 混合精度训练配置
-        self.use_amp = self.use_cuda  # 自动混合精度训练
-        self.amp_dtype = torch.float16  # AMP数据类型
+        self.use_amp = self.use_cuda
+        self.amp_dtype = torch.float16
 
-        # 梯度累积配置
-        self.gradient_accumulation_steps = 1  # 梯度累积步数
+        self.gradient_accumulation_steps = 1
 
-        # 数据预加载到GPU
-        self.preload_to_gpu = True  # 将所有训练数据预加载到GPU
-        self.gpu_cache_size = 0.9  # 使用90%的GPU内存作为数据缓存
+        self.preload_to_gpu = True
+        self.gpu_cache_size = 0.9
 
         # ========== 令牌机制配置 ==========
-        self.token_timeout = 30.0  # 令牌超时时间（秒）
-        self.token_verification_enabled = True  # 启用令牌验证
+        self.token_timeout = 30.0
+        self.token_verification_enabled = True
 
         # ========== 并行处理配置 ==========
-        self.client_parallel_workers = 5  # 客户端并行工作线程数
-        self.processing_queue_size = 100  # 处理队列大小
+        self.client_parallel_workers = 5
+        self.processing_queue_size = 100
 
         # ========== CUDA优化选项 ==========
         if self.use_cuda:
-            # 启用TF32以提升A100等现代GPU性能
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
-
-            # 启用cudnn benchmark以自动寻找最优算法
             torch.backends.cudnn.benchmark = True
-
-            # 设置cudnn deterministic为False以获得更好性能
             torch.backends.cudnn.deterministic = False
 
         # ========== 打印配置信息 ==========
@@ -293,6 +316,7 @@ class VFLConfig:
             'CIFAR10': DatasetConfig.CIFAR10,
             'FashionMNIST': DatasetConfig.FASHION_MNIST,
             'SVHN': DatasetConfig.SVHN,
+            'NUS_WIDE': DatasetConfig.NUS_WIDE,
         }
 
         if dataset_name not in dataset_configs:
@@ -311,6 +335,11 @@ class VFLConfig:
         print(f"  Input Channels: {self.dataset_config['input_channels']}")
         print(f"  Image Size: {self.dataset_config['image_size']}")
         print(f"  Number of Classes: {self.dataset_config['num_classes']}")
+
+        if self.dataset_config.get('is_multimodal'):
+            print(f"  📌 Multimodal Dataset")
+            print(f"  Feature Dimension: {self.dataset_config.get('feature_dim', 'N/A')}")
+
         print(f"  Bottom Model Output: {self.dataset_config['bottom_model']['fc_out']}")
         print(f"  Top Model Input: {self.top_model_input_dim} (using accumulation)")
 
@@ -366,17 +395,14 @@ class VFLConfig:
         if not self.use_cuda:
             return
 
-        # 每个样本大小估算
         img_size = self.dataset_config['image_size']
         channels = self.dataset_config['input_channels']
-        bytes_per_sample = img_size[0] * img_size[1] * channels * 4  # float32
+        bytes_per_sample = img_size[0] * img_size[1] * channels * 4
         total_data_bytes = num_samples * bytes_per_sample * self.num_parties
         total_data_gb = total_data_bytes / 1024 ** 3
 
-        # 模型参数估算
-        model_params_gb = 0.1  # 约100MB
+        model_params_gb = 0.1
 
-        # 中间激活估算
         activation_gb = (self.batch_size * self.top_model_input_dim * 4) / 1024 ** 3 * 10
 
         total_estimated = total_data_gb + model_params_gb + activation_gb
@@ -396,6 +422,7 @@ class VFLConfig:
         else:
             utilization = (total_estimated / gpu_memory) * 100
             print(f"  ✓ Estimated GPU utilization: {utilization:.1f}%")
+
 
 # 全局配置实例（默认使用MNIST）
 default_vfl_config = VFLConfig('MNIST')
